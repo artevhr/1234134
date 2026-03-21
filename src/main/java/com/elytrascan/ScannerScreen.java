@@ -165,9 +165,10 @@ public class ScannerScreen extends Screen {
         ctx.drawText(textRenderer, "§8НАСТРОЙКИ", px + 14, py + Y_SETTINGS_LBL, 0xAAAAAA, false);
 
         // Радиус
+        ctx.drawText(textRenderer, "Радиус сканирования", px + 14, py + Y_RADIUS - 11, GuiRenderer.COL_GRAY_DARK, false);
         GuiRenderer.drawButton(ctx, textRenderer, px + 12, py + Y_RADIUS, 24, 20, "−", isHov(BTN_MINUS), false);
-        String radVal = "  " + ScanConfig.scanRadius + " чанк  ≈ " + (ScanConfig.scanRadius * 16) + " блоков";
-        ctx.drawText(textRenderer, radVal, px + 38, py + Y_RADIUS + 7, GuiRenderer.COL_BLACK, false);
+        String radVal = ScanConfig.scanRadius + " чанк  ≈ " + (ScanConfig.scanRadius * 16) + " бл.";
+        ctx.drawText(textRenderer, radVal, px + 42, py + Y_RADIUS + 6, GuiRenderer.COL_BLACK, false);
         GuiRenderer.drawButton(ctx, textRenderer, px + 94, py + Y_RADIUS, 24, 20, "+", isHov(BTN_PLUS), false);
 
         // Тоглы
@@ -191,13 +192,15 @@ public class ScannerScreen extends Screen {
         // ── Список ────────────────────────────────────────────────────────────
         ctx.drawText(textRenderer, "§8ЦЕЛЕВЫЕ БЛОКИ", px + 14, py + Y_LIST_LBL, 0xAAAAAA, false);
         int cnt = ScanConfig.targetBlocks.size();
-        if (cnt > 0) {
-            int bx = px + 14 + textRenderer.getWidth("ЦЕЛЕВЫЕ БЛОКИ") + 14;
-            String cs = String.valueOf(cnt);
-            int bw = Math.max(20, textRenderer.getWidth(cs) + 10);
-            GuiRenderer.fillRoundedRect(ms, bx - 2, py + Y_LIST_LBL - 1, bw, 12, 6, GuiRenderer.COL_BLACK);
-            ctx.drawText(textRenderer, cs, bx + (bw - 6 - textRenderer.getWidth(cs)) / 2,
-                    py + Y_LIST_LBL + 2, 0xFFFFFF, false);
+        {
+            int bx = px + 14 + textRenderer.getWidth("ЦЕЛЕВЫЕ БЛОКИ") + 8;
+            String cs = cnt > 0 ? String.valueOf(cnt) : "0";
+            int bw = textRenderer.getWidth(cs) + 10;
+            GuiRenderer.fillRoundedRect(ms, bx, py + Y_LIST_LBL - 2, bw, 13, 6,
+                    cnt > 0 ? GuiRenderer.COL_BLACK : GuiRenderer.COL_GRAY_MID);
+            ctx.drawText(textRenderer, cs,
+                    bx + (bw - textRenderer.getWidth(cs)) / 2,
+                    py + Y_LIST_LBL + 1, 0xFFFFFF, false);
         }
 
         int lx = px + 12, ly = py + Y_LIST;
