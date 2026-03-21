@@ -17,7 +17,7 @@ jobs:
 
       - name: Generate wrapper & build
         run: |
-          gradle wrapper --gradle-version=8.3
+          gradle wrapper --gradle-version=8.8
           chmod +x gradlew
           ./gradlew build
 
