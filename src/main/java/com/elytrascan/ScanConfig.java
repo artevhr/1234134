@@ -20,6 +20,8 @@ public class ScanConfig {
     public static List<String> targetBlocks = new ArrayList<>();
     public static int    scanRadius        = 3;   // в чанках (1 чанк = 16 блоков)
     public static boolean onlyWhenElytra   = true;
+    public static boolean bypassAntiXray   = false;
+    public static boolean prioritizeText   = false; // только блоки с текстом/именем
 
     // ── сохранение / загрузка ─────────────────────────────────
     public static void load() {
@@ -36,7 +38,9 @@ public class ScanConfig {
             scanEnabled   = d.scanEnabled;
             if (d.targetBlocks != null) targetBlocks = new ArrayList<>(d.targetBlocks);
             scanRadius    = Math.max(1, Math.min(8, d.scanRadius));
-            onlyWhenElytra = d.onlyWhenElytra;
+            onlyWhenElytra  = d.onlyWhenElytra;
+            bypassAntiXray  = d.bypassAntiXray;
+            prioritizeText  = d.prioritizeText;
         } catch (Exception e) {
             ElytraScanMod.LOGGER.error("ElytraScan: не удалось загрузить конфиг", e);
         }
@@ -49,6 +53,8 @@ public class ScanConfig {
             d.targetBlocks   = new ArrayList<>(targetBlocks);
             d.scanRadius     = scanRadius;
             d.onlyWhenElytra = onlyWhenElytra;
+            d.bypassAntiXray = bypassAntiXray;
+            d.prioritizeText = prioritizeText;
             GSON.toJson(d, w);
         } catch (Exception e) {
             ElytraScanMod.LOGGER.error("ElytraScan: не удалось сохранить конфиг", e);
@@ -61,5 +67,7 @@ public class ScanConfig {
         List<String> targetBlocks   = new ArrayList<>();
         int          scanRadius     = 3;
         boolean      onlyWhenElytra = true;
+        boolean      bypassAntiXray = false;
+        boolean      prioritizeText = false;
     }
 }

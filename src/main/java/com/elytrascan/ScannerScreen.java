@@ -37,7 +37,7 @@ public class ScannerScreen extends Screen {
 
     // Размеры панели
     private static final int W = 330;
-    private static final int H = 310;
+    private static final int H = 330;
 
     // Список — видимые строки
     private static final int LIST_ROWS    = 6;
@@ -64,38 +64,29 @@ public class ScannerScreen extends Screen {
         px = (width  - W) / 2;
         py = (height - H) / 2;
 
-        // Поле ввода блока
+        // ── Поле ввода блока ────────────────────────────────────────────────
         blockInput = new TextFieldWidget(
                 textRenderer,
-                px + 10, py + 174, 198, 16,
+                px + 10, py + 207, 198, 16,
                 Text.literal("Block ID"));
         blockInput.setMaxLength(250);
         blockInput.setPlaceholder(Text.literal("minecraft:chest"));
         addDrawableChild(blockInput);
 
-        // Кнопка добавить
-        addBtn(px + 212, py + 174, 108, 16, "+ Добавить", btn -> addBlock());
-
-        // Кнопка удалить
-        addBtn(px + 10, py + 194, 100, 16, "✕ Удалить", btn -> removeBlock());
-
-        // Сброс карты
-        addBtn(px + 116, py + 194, 105, 16, "↺ Сбросить карту", btn -> {
-            BlockScanner.restartSession();
-        });
-
-        // ESC / Закрыть
-        addBtn(px + 225, py + 194, 95, 16, "Закрыть [ESC]", btn -> close());
+        addBtn(px + 212, py + 207, 108, 16, "+ Добавить", btn -> addBlock());
+        addBtn(px + 10,  py + 227, 100, 16, "✕ Удалить",  btn -> removeBlock());
+        addBtn(px + 116, py + 227, 105, 16, "↺ Сбросить карту", btn -> BlockScanner.restartSession());
+        addBtn(px + 225, py + 227, 95,  16, "Закрыть [ESC]",    btn -> close());
 
         // ── Пресеты ─────────────────────────────────────────────────────────
-        int presY = py + 216;
+        int presY = py + 249;
         addPreset(px + 10,  presY, "Сундук",    "minecraft:chest");
         addPreset(px + 65,  presY, "Спавнер",   "minecraft:spawner");
         addPreset(px + 125, presY, "Зашитый",   "minecraft:ender_chest");
         addPreset(px + 186, presY, "Обломки",   "minecraft:ancient_debris");
         addPreset(px + 257, presY, "Баррель",   "minecraft:barrel");
 
-        int presY2 = py + 233;
+        int presY2 = py + 266;
         addPreset(px + 10,  presY2, "Алмаз",   "minecraft:diamond_ore");
         addPreset(px + 58,  presY2, "Изумруд",  "minecraft:emerald_ore");
         addPreset(px + 112, presY2, "Нет.Руда", "minecraft:nether_gold_ore");
@@ -114,8 +105,26 @@ public class ScannerScreen extends Screen {
                     btn.setMessage(Text.literal(elytraText()));
                 });
 
+        // ── Обход антиксрея ─────────────────────────────────────────────────
+        addBtn(px + 10, py + 62, 310, 14,
+                bypassText(), btn -> {
+                    ScanConfig.bypassAntiXray = !ScanConfig.bypassAntiXray;
+                    ScanConfig.save();
+                    BlockScanner.restartSession();
+                    btn.setMessage(Text.literal(bypassText()));
+                });
+
+        // ── Только с текстом ─────────────────────────────────────────────────
+        addBtn(px + 10, py + 79, 310, 14,
+                priorityTextBtn(), btn -> {
+                    ScanConfig.prioritizeText = !ScanConfig.prioritizeText;
+                    ScanConfig.save();
+                    BlockScanner.restartSession();
+                    btn.setMessage(Text.literal(priorityTextBtn()));
+                });
+
         // ── Главная кнопка вкл/выкл ─────────────────────────────────────────
-        btnToggle = addBtn(px + 10, py + 256, W - 20, 22,
+        btnToggle = addBtn(px + 10, py + 289, W - 20, 22,
                 toggleText(), btn -> {
                     ScanConfig.scanEnabled = !ScanConfig.scanEnabled;
                     if (ScanConfig.scanEnabled) BlockScanner.restartSession();
@@ -180,6 +189,18 @@ public class ScannerScreen extends Screen {
                 : "§c█  СКАНИРОВАНИЕ  ВЫКЛЮЧЕНО  █";
     }
 
+    private String priorityTextBtn() {
+        return ScanConfig.prioritizeText
+                ? "§e📝 В приоритете текст над блоком: §aВКЛ  §8— только блоки с именем/надписью"
+                : "§7📝 В приоритете текст над блоком: §cВЫКЛ §8— записывать все найденные блоки";
+    }
+
+    private String bypassText() {
+        return ScanConfig.bypassAntiXray
+                ? "§b🔓 Обход замены блоков (Anti-Xray): §aВКЛ  §8— скан только вплотную"
+                : "§7🔒 Обход замены блоков (Anti-Xray): §cВЫКЛ §8— скан на всей дистанции";
+    }
+
     private String elytraText() {
         return ScanConfig.onlyWhenElytra
                 ? "§e🪂 Только элитры: §aВКЛ"
@@ -223,15 +244,15 @@ public class ScannerScreen extends Screen {
         ctx.drawTextWithShadow(textRenderer, radStr, px + 34, py + 47, 0xFFFFFF);
 
         // ── Разделитель ───────────────────────────────────────────────────
-        ctx.fill(px + 5, py + 63, px + W - 5, py + 64, 0xFF333355);
+        ctx.fill(px + 5, py + 96, px + W - 5, py + 97, 0xFF333355);
 
         // ── Заголовок списка ──────────────────────────────────────────────
-        ctx.drawTextWithShadow(textRenderer, "§fЦелевые блоки:", px + 10, py + 67, 0xFFFFFF);
+        ctx.drawTextWithShadow(textRenderer, "§fЦелевые блоки:", px + 10, py + 100, 0xFFFFFF);
         int cnt = ScanConfig.targetBlocks.size();
-        ctx.drawTextWithShadow(textRenderer, "§8(" + cnt + " шт.)", px + 105, py + 67, 0xAAAAAA);
+        ctx.drawTextWithShadow(textRenderer, "§8(" + cnt + " шт.)", px + 105, py + 100, 0xAAAAAA);
 
         // ── Список блоков ─────────────────────────────────────────────────
-        int lx = px + 10, ly = py + 78;
+        int lx = px + 10, ly = py + 111;
         int lw = W - 20,  lh = LIST_ROWS * ROW_H + 4;
         ctx.fill(lx, ly, lx + lw, ly + lh, 0xFF0A0A14);
         ctx.fill(lx, ly, lx + lw, ly + 1,  0xFF334466);  // top border
@@ -273,20 +294,19 @@ public class ScannerScreen extends Screen {
         }
 
         // ── Разделитель ───────────────────────────────────────────────────
-        ctx.fill(px + 5, py + 212, px + W - 5, py + 213, 0xFF333355);
+        ctx.fill(px + 5, py + 245, px + W - 5, py + 246, 0xFF333355);
 
         // Пресеты — метка
-        ctx.drawTextWithShadow(textRenderer, "§7Быстрые пресеты:", px + 10, py + 205, 0x888888);
+        ctx.drawTextWithShadow(textRenderer, "§7Быстрые пресеты:", px + 10, py + 238, 0x888888);
 
         // ── Лог-файл ──────────────────────────────────────────────────────
-        ctx.fill(px + 5, py + 250, px + W - 5, py + 251, 0xFF333355);
+        ctx.fill(px + 5, py + 283, px + W - 5, py + 284, 0xFF333355);
         String logPath = BlockScanner.getLogPath();
-        // Обрезаем до ширины панели
         String displayPath = logPath;
         while (textRenderer.getWidth("§8" + displayPath) > W - 20 && displayPath.length() > 6) {
             displayPath = "…" + displayPath.substring(Math.min(displayPath.length(), 4));
         }
-        ctx.drawTextWithShadow(textRenderer, "§8Лог: " + displayPath, px + 10, py + 253, 0x666666);
+        ctx.drawTextWithShadow(textRenderer, "§8Лог: " + displayPath, px + 10, py + 286, 0x666666);
 
         super.render(ctx, mx, my, delta);
     }
@@ -295,7 +315,7 @@ public class ScannerScreen extends Screen {
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
         // Клик по списку
-        int lx = px + 10, ly = py + 78;
+        int lx = px + 10, ly = py + 111;
         int lw = W - 20,  lh = LIST_ROWS * ROW_H + 4;
         if (mx >= lx && mx <= lx + lw && my >= ly && my <= ly + lh) {
             int idx = (int)((my - ly - 2) / ROW_H) + scrollOff;

@@ -2,11 +2,16 @@ package com.elytrascan;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.Registries;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
@@ -17,80 +22,90 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-/**
- * Ядро сканера.
- * Логика: при каждом тике, если игрок летит на элитрах (или это отключено),
- * мод добавляет незасканированные загруженные чанки в очередь и
- * обрабатывает по 2 чанка за тик. Каждый чанк сканируется полностью
- * по всем Y (от дна мира до потолка), поэтому блоки под землёй
- * не пропускаются.
- */
 public class BlockScanner {
 
-    // ── состояние ────────────────────────────────────────────────────────────
     private static final Set<Long>       scannedChunks = new HashSet<>();
+    private static final Set<Long>       scannedClose  = new HashSet<>();
     private static final Queue<ChunkPos> scanQueue     = new ArrayDeque<>();
     private static final Set<BlockPos>   foundSet      = new HashSet<>();
 
-    public static volatile int  totalFound    = 0;
-    public static volatile int  chunksScanned = 0;
-    public static volatile String lastWorld   = "";
+    // Порог "вплотную" для обхода антиксрея — 2 чанка по XZ (32 блока).
+    // Большинство антиксрей-плагинов раскрывают блоки в этом радиусе.
+    private static final int BYPASS_CLOSE_CHUNKS = 2;
 
-    // ── flash-уведомление ────────────────────────────────────────────────────
-    private static String flashMsg  = "";
+    public static volatile int    totalFound    = 0;
+    public static volatile int    chunksScanned = 0;
+    public static volatile int    textFound     = 0;
+    public static volatile String lastWorld     = "";
+
+    private static String flashMsg   = "";
     private static long   flashUntil = 0L;
 
-    // ── лог-файл ─────────────────────────────────────────────────────────────
     private static final Path LOG_DIR =
             FabricLoader.getInstance().getGameDir().resolve("elytrascan_logs");
-    private static PrintWriter logWriter     = null;
+    private static PrintWriter logWriter      = null;
     private static String      currentLogName = "";
 
     // ── главный тик ──────────────────────────────────────────────────────────
     public static void tick(MinecraftClient mc) {
-        if (!ScanConfig.scanEnabled)          return;
+        if (!ScanConfig.scanEnabled)               return;
         if (mc.player == null || mc.world == null) return;
 
         PlayerEntity player = mc.player;
         if (ScanConfig.onlyWhenElytra && !player.isFallFlying()) return;
-        if (ScanConfig.targetBlocks.isEmpty()) return;
+        if (ScanConfig.targetBlocks.isEmpty())     return;
 
-        // Смена мира → сброс состояния
         String worldName = resolveWorldName(mc);
-        if (!worldName.equals(lastWorld)) {
-            resetForWorld(worldName);
-        }
+        if (!worldName.equals(lastWorld)) resetForWorld(worldName);
 
-        // Добавляем новые чанки вокруг игрока
         ChunkPos pc = new ChunkPos(player.getBlockPos());
         int r = ScanConfig.scanRadius;
+
         for (int cx = pc.x - r; cx <= pc.x + r; cx++) {
             for (int cz = pc.z - r; cz <= pc.z + r; cz++) {
+                if (!mc.world.getChunkManager().isChunkLoaded(cx, cz)) continue;
                 long key = ChunkPos.toLong(cx, cz);
-                if (!scannedChunks.contains(key)
-                        && mc.world.getChunkManager().isChunkLoaded(cx, cz)) {
-                    scannedChunks.add(key);
-                    scanQueue.add(new ChunkPos(cx, cz));
+
+                if (ScanConfig.bypassAntiXray) {
+                    // При полёте на элитрах игрок пролетает над каждым чанком
+                    // на расстоянии ≤2 по XZ — антиксрей к этому моменту
+                    // уже раскрыл блоки. Дальние чанки сбрасываем.
+                    int distX = Math.abs(cx - pc.x);
+                    int distZ = Math.abs(cz - pc.z);
+                    boolean isClose = distX <= BYPASS_CLOSE_CHUNKS
+                                   && distZ <= BYPASS_CLOSE_CHUNKS;
+
+                    if (isClose && !scannedClose.contains(key)) {
+                        scannedClose.add(key);
+                        scannedChunks.add(key);
+                        scanQueue.add(new ChunkPos(cx, cz));
+                    } else if (!isClose) {
+                        scannedClose.remove(key); // улетели — сброс
+                    }
+                } else {
+                    if (!scannedChunks.contains(key)) {
+                        scannedChunks.add(key);
+                        scanQueue.add(new ChunkPos(cx, cz));
+                    }
                 }
             }
         }
 
-        // Обрабатываем 2 чанка за тик (≈ 2 × 98 304 getBlockState)
         for (int i = 0; i < 2 && !scanQueue.isEmpty(); i++) {
             ChunkPos cp = scanQueue.poll();
             if (cp != null) processChunk(mc.world, cp);
         }
     }
 
-    // ── сканирование одного чанка ────────────────────────────────────────────
+    // ── сканирование чанка ───────────────────────────────────────────────────
     private static void processChunk(World world, ChunkPos cp) {
         WorldChunk chunk = world.getChunk(cp.x, cp.z);
-        int baseX  = cp.getStartX();
-        int baseZ  = cp.getStartZ();
+        int baseX   = cp.getStartX();
+        int baseZ   = cp.getStartZ();
         int bottomY = world.getBottomY();
         int topY    = world.getTopY();
 
-        List<BlockPos> newPositions = new ArrayList<>();
+        List<FoundBlock> newBlocks = new ArrayList<>();
 
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
@@ -102,62 +117,107 @@ public class BlockScanner {
                     if (state.isAir()) continue;
 
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
-                    if (ScanConfig.targetBlocks.contains(id)) {
-                        foundSet.add(pos.toImmutable());
-                        newPositions.add(pos.toImmutable());
-                        totalFound++;
-                    }
+                    if (!ScanConfig.targetBlocks.contains(id)) continue;
+
+                    String label = findTextAtBlock(world, pos);
+
+                    // Режим "только с текстом" — пропустить блоки без надписи
+                    if (ScanConfig.prioritizeText && label == null) continue;
+
+                    foundSet.add(pos.toImmutable());
+                    newBlocks.add(new FoundBlock(pos.toImmutable(), id, label));
+                    totalFound++;
+                    if (label != null) textFound++;
                 }
             }
         }
 
         chunksScanned++;
 
-        if (!newPositions.isEmpty()) {
-            writeToLog(newPositions, world);
-            flashMsg   = "+" + newPositions.size() + " блок(ов) найдено!";
+        if (!newBlocks.isEmpty()) {
+            writeToLog(newBlocks, world);
+            long withText = newBlocks.stream().filter(b -> b.label != null).count();
+            flashMsg = "+" + newBlocks.size() + " блок(ов)"
+                    + (withText > 0 ? "  §e(" + withText + " с текстом)" : "");
             flashUntil = System.currentTimeMillis() + 3500L;
         }
     }
 
-    // ── запись в файл ────────────────────────────────────────────────────────
-    private static void writeToLog(List<BlockPos> positions, World world) {
+    // ── поиск текста у/над блоком ─────────────────────────────────────────────
+    /**
+     * 1. CustomName блок-энтити (переименованный через наковальню сундук/баррель и т.д.)
+     * 2. TextDisplay энтити (1.19.4+) в кубе ±1 блок по XZ, +3 блока вверх
+     */
+    private static String findTextAtBlock(World world, BlockPos pos) {
+        // 1. Блок-энтити
+        BlockEntity be = world.getBlockEntity(pos);
+        if (be instanceof net.minecraft.nameable.Nameable nameable) {
+            Text customName = nameable.getCustomName();
+            if (customName != null) {
+                String s = strip(customName.getString());
+                if (!s.isBlank()) return s;
+            }
+        }
+
+        // 2. TextDisplay энтити рядом
+        Box box = new Box(
+                pos.getX() - 1, pos.getY() - 0.5, pos.getZ() - 1,
+                pos.getX() + 2, pos.getY() + 3.5,  pos.getZ() + 2
+        );
+        List<Entity> entities = world.getEntitiesByClass(
+                Entity.class, box,
+                e -> e instanceof DisplayEntity.TextDisplayEntity);
+        if (!entities.isEmpty()) {
+            String s = strip(((DisplayEntity.TextDisplayEntity) entities.get(0))
+                    .getText().getString());
+            if (!s.isBlank()) return s;
+        }
+
+        return null;
+    }
+
+    private static String strip(String s) {
+        return s.replaceAll("§[0-9a-fk-orA-FK-OR]", "").trim();
+    }
+
+    // ── запись в лог ─────────────────────────────────────────────────────────
+    private static void writeToLog(List<FoundBlock> blocks, World world) {
         if (logWriter == null) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
         String ts  = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String dim = world.getRegistryKey().getValue().toString();
-        String playerXYZ = mc.player != null
+        String pXYZ = mc.player != null
                 ? String.format("%.0f / %.0f / %.0f",
-                mc.player.getX(), mc.player.getY(), mc.player.getZ())
-                : "?";
+                  mc.player.getX(), mc.player.getY(), mc.player.getZ()) : "?";
 
-        for (BlockPos pos : positions) {
-            BlockState state = world.getBlockState(pos);
-            String id = Registries.BLOCK.getId(state.getBlock()).toString();
+        for (FoundBlock b : blocks) {
             logWriter.printf("[%s] [%s]  %-40s  X=%-6d  Y=%-4d  Z=%-6d  (игрок: %s)%n",
-                    ts, dim, id,
-                    pos.getX(), pos.getY(), pos.getZ(),
-                    playerXYZ);
+                    ts, dim, b.blockId,
+                    b.pos.getX(), b.pos.getY(), b.pos.getZ(), pXYZ);
+            if (b.label != null) {
+                logWriter.printf("         >>> Текст: \"%s\"%n", b.label);
+            }
         }
         logWriter.flush();
     }
 
-    // ── сброс при смене мира ─────────────────────────────────────────────────
+    private record FoundBlock(BlockPos pos, String blockId, String label) {}
+
+    // ── сброс/открытие лога ──────────────────────────────────────────────────
     public static void resetForWorld(String worldName) {
         lastWorld = worldName;
         scannedChunks.clear();
+        scannedClose.clear();
         scanQueue.clear();
         foundSet.clear();
-        totalFound    = 0;
-        chunksScanned = 0;
+        totalFound = chunksScanned = textFound = 0;
 
         if (logWriter != null) {
             logWriter.println("\n=== Сессия завершена ===");
             logWriter.close();
             logWriter = null;
         }
-
         openNewLog(worldName);
     }
 
@@ -167,16 +227,18 @@ public class BlockScanner {
             String safe = worldName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
             String ts   = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             currentLogName = safe + "_" + ts + ".txt";
-            File file = LOG_DIR.resolve(currentLogName).toFile();
-            logWriter = new PrintWriter(new FileWriter(file, true), true);
+            logWriter = new PrintWriter(
+                    new FileWriter(LOG_DIR.resolve(currentLogName).toFile(), true), true);
 
             logWriter.println("╔══════════════════════════════════════════════════════════════╗");
             logWriter.println("║                     ElytraScan  v1.0                        ║");
             logWriter.println("╚══════════════════════════════════════════════════════════════╝");
-            logWriter.println("Мир:    " + worldName);
-            logWriter.println("Начало: " + LocalDateTime.now()
+            logWriter.println("Мир:              " + worldName);
+            logWriter.println("Начало:           " + LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-            logWriter.println("Цели:   " + String.join(", ", ScanConfig.targetBlocks));
+            logWriter.println("Цели:             " + String.join(", ", ScanConfig.targetBlocks));
+            logWriter.println("Обход антиксрея:  " + (ScanConfig.bypassAntiXray ? "ВКЛ" : "выкл"));
+            logWriter.println("Только с текстом: " + (ScanConfig.prioritizeText ? "ВКЛ" : "выкл"));
             logWriter.println("─".repeat(70));
             logWriter.flush();
         } catch (Exception e) {
@@ -184,22 +246,16 @@ public class BlockScanner {
         }
     }
 
-    /** Вызывается из GUI при изменении настроек (новый список блоков и т.д.) */
     public static void restartSession() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.world != null) {
-            resetForWorld(resolveWorldName(mc));
-        }
+        if (mc.world != null) resetForWorld(resolveWorldName(mc));
     }
 
-    // ── утилиты ──────────────────────────────────────────────────────────────
     public static String resolveWorldName(MinecraftClient mc) {
-        if (mc.isIntegratedServerRunning() && mc.getServer() != null) {
+        if (mc.isIntegratedServerRunning() && mc.getServer() != null)
             return mc.getServer().getSaveProperties().getLevelName();
-        }
-        if (mc.getCurrentServerEntry() != null) {
+        if (mc.getCurrentServerEntry() != null)
             return mc.getCurrentServerEntry().address;
-        }
         return "unknown";
     }
 
@@ -208,7 +264,7 @@ public class BlockScanner {
         return LOG_DIR.resolve(currentLogName).toAbsolutePath().toString();
     }
 
-    // ── HUD-рендер ────────────────────────────────────────────────────────────
+    // ── HUD ──────────────────────────────────────────────────────────────────
     public static void renderHud(DrawContext ctx) {
         if (!ScanConfig.scanEnabled) return;
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -219,30 +275,33 @@ public class BlockScanner {
 
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
+        int x = 4, y = sh - 31;
 
-        // ── строка статуса (левый нижний угол) ──────────────────────────────
-        int x = 4, y = sh - 22;
         String statusLine = active
-                ? "§a▶ §fСкан" + (scanQueue.isEmpty() ? " §7(в ожидании)" : " §e(" + scanQueue.size() + " ч.)")
+                ? "§a▶ §fСкан" + (scanQueue.isEmpty()
+                    ? " §7(в ожидании)" : " §e(" + scanQueue.size() + " ч.)")
                 : "§7⏸ §7Скан (нет элитр)";
-        String foundLine = "§7Найдено: §b" + totalFound + "  §7Чанков: §e" + chunksScanned;
+        String foundLine = "§7Найдено: §b" + totalFound
+                + (textFound > 0 ? " §7(текст: §e" + textFound + "§7)" : "")
+                + "  §7Чанков: §e" + chunksScanned;
+        String modeLine = (ScanConfig.bypassAntiXray ? "§b[обход ксрей]" : "")
+                + (ScanConfig.prioritizeText ? " §e[только текст]" : "");
 
-        ctx.fill(x - 2, y - 2, x + 170, y + 18, 0x99000000);
+        int hudH = modeLine.isBlank() ? 20 : 29;
+        ctx.fill(x - 2, y - 2, x + 215, y + hudH, 0x99000000);
         ctx.drawTextWithShadow(mc.textRenderer, statusLine, x, y,     0xFFFFFF);
         ctx.drawTextWithShadow(mc.textRenderer, foundLine,  x, y + 9, 0xFFFFFF);
+        if (!modeLine.isBlank())
+            ctx.drawTextWithShadow(mc.textRenderer, modeLine, x, y + 18, 0xFFFFFF);
 
-        // ── flash-уведомление ────────────────────────────────────────────────
         long now = System.currentTimeMillis();
         if (now < flashUntil) {
-            long remaining = flashUntil - now;
-            float alpha = remaining < 700 ? (remaining / 700f) : 1f;
+            long rem = flashUntil - now;
+            float alpha = rem < 700 ? (rem / 700f) : 1f;
             int a = (int)(alpha * 0xBB);
-            int bg = (a << 24) | 0x002200;
-
             int fw = mc.textRenderer.getWidth("§a✔ " + flashMsg) + 10;
-            int fx = (sw - fw) / 2;
-            int fy = sh / 2 + 30;
-            ctx.fill(fx - 4, fy - 2, fx + fw, fy + 11, bg);
+            int fx = (sw - fw) / 2, fy = sh / 2 + 30;
+            ctx.fill(fx - 4, fy - 2, fx + fw, fy + 11, (a << 24) | 0x002200);
             ctx.drawCenteredTextWithShadow(mc.textRenderer, "§a✔ " + flashMsg,
                     sw / 2, fy, 0x55FF55);
         }
