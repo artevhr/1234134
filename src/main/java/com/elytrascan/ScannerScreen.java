@@ -44,7 +44,6 @@ public class ScannerScreen extends Screen {
     private static final int Y_TGL_TEXT      = 150;
     private static final int Y_TGL_ESP       = 174;
     private static final int Y_SEP1          = 200;
-    private static final int Y_SEP1          = 200;
     private static final int Y_LIST_LBL      = 208;
     private static final int Y_LIST          = 220;
     private static final int Y_INPUT         = 326;
