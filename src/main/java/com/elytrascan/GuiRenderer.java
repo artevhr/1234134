@@ -157,28 +157,31 @@ public class GuiRenderer {
     /**
      * Кнопка: чёрная залитая с белым текстом / инвертированная при hover
      */
-    public static void drawButton(MatrixStack ms, net.minecraft.client.font.TextRenderer tr,
+    public static void drawButton(net.minecraft.client.gui.DrawContext ctx,
+                                   net.minecraft.client.font.TextRenderer tr,
                                    float x, float y, float w, float h,
                                    String label, boolean hovered, boolean danger) {
-        int bg   = danger ? (hovered ? 0xFFB71C1C : COL_RED)
-                          : (hovered ? COL_HOVER   : COL_BLACK);
-        int fg   = 0xFFFFFFFF;
-        fillRoundedRect(ms, x, y, w, h, 4, bg);
+        int bg = danger ? (hovered ? 0xFFB71C1C : COL_RED)
+                        : (hovered ? COL_HOVER   : COL_BLACK);
+        fillRoundedRect(ctx.getMatrices(), x, y, w, h, 4, bg);
         int lw = tr.getWidth(label);
-        tr.drawWithShadow(ms, label, x + (w - lw) / 2f, y + (h - 8) / 2f, fg);
+        ctx.drawTextWithShadow(tr, label,
+                (int)(x + (w - lw) / 2f), (int)(y + (h - 8) / 2f), 0xFFFFFF);
     }
 
     /**
      * Кнопка-призрак: белая с чёрной рамкой
      */
-    public static void drawGhostButton(MatrixStack ms, net.minecraft.client.font.TextRenderer tr,
+    public static void drawGhostButton(net.minecraft.client.gui.DrawContext ctx,
+                                        net.minecraft.client.font.TextRenderer tr,
                                         float x, float y, float w, float h,
                                         String label, boolean hovered) {
         int bg = hovered ? 0xFFEEEEEE : 0xFFFFFFFF;
-        fillRoundedRect(ms, x, y, w, h, 4, bg);
-        drawRoundedRectOutline(ms, x, y, w, h, 4, 1, COL_GRAY_LITE);
+        fillRoundedRect(ctx.getMatrices(), x, y, w, h, 4, bg);
+        drawRoundedRectOutline(ctx.getMatrices(), x, y, w, h, 4, 1, COL_GRAY_LITE);
         int lw = tr.getWidth(label);
-        tr.draw(ms, label, x + (w - lw) / 2f, y + (h - 8) / 2f, COL_BLACK);
+        ctx.drawText(tr, label,
+                (int)(x + (w - lw) / 2f), (int)(y + (h - 8) / 2f), COL_BLACK, false);
     }
 
     /**
@@ -197,14 +200,16 @@ public class GuiRenderer {
     /**
      * Маленький тег-пресет (pill-кнопка)
      */
-    public static void drawPresetPill(MatrixStack ms, net.minecraft.client.font.TextRenderer tr,
-                                       float x, float y, String label, boolean hovered, boolean active) {
+    public static void drawPresetPill(net.minecraft.client.gui.DrawContext ctx,
+                                       net.minecraft.client.font.TextRenderer tr,
+                                       float x, float y, String label,
+                                       boolean hovered, boolean active) {
         float pw = tr.getWidth(label) + 12, ph = 16;
         int bg = active  ? COL_BLACK :
                  hovered ? 0xFFE0E0E0 : 0xFFF0F0F0;
         int fg = active  ? 0xFFFFFFFF : COL_GRAY_DARK;
-        fillRoundedRect(ms, x, y, pw, ph, 8, bg);
-        tr.draw(ms, label, x + 6, y + 4, fg);
+        fillRoundedRect(ctx.getMatrices(), x, y, pw, ph, 8, bg);
+        ctx.drawText(tr, label, (int)(x + 6), (int)(y + 4), fg, false);
     }
 
     public static float presetPillWidth(net.minecraft.client.font.TextRenderer tr, String label) {

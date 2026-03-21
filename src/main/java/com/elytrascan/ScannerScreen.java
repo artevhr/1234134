@@ -170,13 +170,13 @@ public class ScannerScreen extends Screen {
         ctx.drawText(textRenderer, "Радиус сканирования", px + 14, ry + 7, GuiRenderer.COL_BLACK, false);
         // − кнопка
         boolean mHov = isHov(BTN_MINUS);
-        GuiRenderer.drawButton(ms, textRenderer, px + 12, ry, 24, 20, "−", mHov, false);
+        GuiRenderer.drawButton(ctx, textRenderer, px + 12, ry, 24, 20, "−", mHov, false);
         // значение
         String radVal = ScanConfig.scanRadius + " чанк";
         ctx.drawText(textRenderer, radVal, px + 42, ry + 7, GuiRenderer.COL_BLACK, false);
         // + кнопка
         boolean pHov = isHov(BTN_PLUS);
-        GuiRenderer.drawButton(ms, textRenderer, px + 94, ry, 24, 20, "+", pHov, false);
+        GuiRenderer.drawButton(ctx, textRenderer, px + 94, ry, 24, 20, "+", pHov, false);
         // пояснение
         String radHint = "≈ " + (ScanConfig.scanRadius * 16) + " блоков";
         ctx.drawText(textRenderer, "§7" + radHint, px + 124, ry + 7, GuiRenderer.COL_GRAY_MID, false);
@@ -195,8 +195,8 @@ public class ScannerScreen extends Screen {
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, ty, ScanConfig.bypassAntiXray);
 
         ty += 24;
-        // Только с текстом
-        ctx.drawText(textRenderer, "Только блоки с текстом/именем", px + 14, ty + 4, GuiRenderer.COL_BLACK, false);
+        // Также с текстом
+        ctx.drawText(textRenderer, "Также искать текст у блока", px + 14, ty + 4, GuiRenderer.COL_BLACK, false);
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, ty, ScanConfig.prioritizeText);
 
         // ── Разделитель ───────────────────────────────────────────────────────
@@ -263,14 +263,14 @@ public class ScannerScreen extends Screen {
         GuiRenderer.drawRoundedRectOutline(ms, px + 11, py + 257, 202, 20, 4, 1,
                 blockInput.isFocused() ? GuiRenderer.COL_BLACK : GuiRenderer.COL_GRAY_LITE);
 
-        GuiRenderer.drawButton(ms, textRenderer, px + 216, py + 258, 112, 18,
+        GuiRenderer.drawButton(ctx, textRenderer, px + 216, py + 258, 112, 18,
                 "+ Добавить", isHov(BTN_ADD), false);
 
-        GuiRenderer.drawGhostButton(ms, textRenderer, px + 12,  py + 282, 100, 18,
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px + 12,  py + 282, 100, 18,
                 "✕ Удалить", isHov(BTN_DEL));
-        GuiRenderer.drawGhostButton(ms, textRenderer, px + 118, py + 282, 105, 18,
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px + 118, py + 282, 105, 18,
                 "↺ Сбросить", isHov(BTN_RESET));
-        GuiRenderer.drawGhostButton(ms, textRenderer, px + 229, py + 282, 99,  18,
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px + 229, py + 282, 99,  18,
                 "Закрыть", isHov(BTN_CLOSE));
 
         // ── Разделитель ───────────────────────────────────────────────────────
@@ -283,7 +283,7 @@ public class ScannerScreen extends Screen {
             // Ищем label по id
             String label = presetLabel(blockId);
             boolean active = ScanConfig.targetBlocks.contains(blockId);
-            GuiRenderer.drawPresetPill(ms, textRenderer, b.x(), b.y(), label,
+            GuiRenderer.drawPresetPill(ctx, textRenderer, b.x(), b.y(), label,
                     isHovBtn(b), active);
         }
 
