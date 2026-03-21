@@ -144,22 +144,24 @@ public class BlockScanner {
     }
 
     // ── поиск текста у/над блоком ─────────────────────────────────────────────
-    /**
-     * 1. CustomName блок-энтити (переименованный через наковальню сундук/баррель и т.д.)
-     * 2. TextDisplay энтити (1.19.4+) в кубе ±1 блок по XZ, +3 блока вверх
-     */
     private static String findTextAtBlock(World world, BlockPos pos) {
-        // 1. Блок-энтити
+        // 1. CustomName блок-энтити через NBT (работает для любого блок-энтити,
+        //    не зависит от маппингов Nameable)
         BlockEntity be = world.getBlockEntity(pos);
-        if (be instanceof net.minecraft.nameable.Nameable nameable) {
-            Text customName = nameable.getCustomName();
-            if (customName != null) {
-                String s = strip(customName.getString());
-                if (!s.isBlank()) return s;
+        if (be != null) {
+            net.minecraft.nbt.NbtCompound nbt = be.createNbt();
+            if (nbt.contains("CustomName")) {
+                try {
+                    Text t = Text.Serializer.fromJson(nbt.getString("CustomName"));
+                    if (t != null) {
+                        String s = strip(t.getString());
+                        if (!s.isBlank()) return s;
+                    }
+                } catch (Exception ignored) {}
             }
         }
 
-        // 2. TextDisplay энтити рядом
+        // 2. TextDisplay энтити над блоком (getDisplayName() — публичный метод Entity)
         Box box = new Box(
                 pos.getX() - 1, pos.getY() - 0.5, pos.getZ() - 1,
                 pos.getX() + 2, pos.getY() + 3.5,  pos.getZ() + 2
@@ -168,8 +170,7 @@ public class BlockScanner {
                 Entity.class, box,
                 e -> e instanceof DisplayEntity.TextDisplayEntity);
         if (!entities.isEmpty()) {
-            String s = strip(((DisplayEntity.TextDisplayEntity) entities.get(0))
-                    .getText().getString());
+            String s = strip(entities.get(0).getDisplayName().getString());
             if (!s.isBlank()) return s;
         }
 
