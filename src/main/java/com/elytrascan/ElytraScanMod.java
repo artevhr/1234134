@@ -4,6 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
@@ -39,5 +40,9 @@ public class ElytraScanMod implements ClientModInitializer {
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) ->
                 BlockScanner.renderHud(drawContext));
+
+        // ESP — рендер в 3D мире
+        WorldRenderEvents.LAST.register(context ->
+                EspRenderer.render(context.matrixStack(), context.camera()));
     }
 }

@@ -29,6 +29,10 @@ public class BlockScanner {
     private static final Queue<ChunkPos> scanQueue     = new ArrayDeque<>();
     private static final Set<BlockPos>   foundSet      = new HashSet<>();
 
+    // Для ESP: позиция → blockId (синхронизированная)
+    public static final Map<BlockPos, String> foundPositions =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
     // Порог "вплотную" для обхода антиксрея — 2 чанка по XZ (32 блока).
     // Большинство антиксрей-плагинов раскрывают блоки в этом радиусе.
     private static final int BYPASS_CLOSE_CHUNKS = 2;
@@ -119,12 +123,15 @@ public class BlockScanner {
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
                     if (!ScanConfig.targetBlocks.contains(id)) continue;
 
-                    String label = findTextAtBlock(world, pos);
+                    String label = ScanConfig.prioritizeText
+                            ? findTextAtBlock(world, pos)
+                            : null;
 
-                    // Режим "только с текстом" — пропустить блоки без надписи
-                    if (ScanConfig.prioritizeText && label == null) continue;
+                    // Режим "также с текстом" выключен — просто пишем блок без поиска текста
+                    // Режим включён — ищем текст и пишем его рядом с блоком (блок пишется всегда)
 
                     foundSet.add(pos.toImmutable());
+                    foundPositions.put(pos.toImmutable(), id);
                     newBlocks.add(new FoundBlock(pos.toImmutable(), id, label));
                     totalFound++;
                     if (label != null) textFound++;
@@ -212,6 +219,7 @@ public class BlockScanner {
         scannedClose.clear();
         scanQueue.clear();
         foundSet.clear();
+        foundPositions.clear();
         totalFound = chunksScanned = textFound = 0;
 
         if (logWriter != null) {

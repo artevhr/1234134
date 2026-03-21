@@ -31,7 +31,7 @@ import java.util.List;
 public class ScannerScreen extends Screen {
 
     private static final int W   = 340;
-    private static final int H   = 460;
+    private static final int H   = 500;
     private static final int R   = 8;
     private static final int LIST_ROWS = 6;
     private static final int ROW_H     = 16;
@@ -42,16 +42,18 @@ public class ScannerScreen extends Screen {
     private static final int Y_TGL_ELYTRA    = 102;
     private static final int Y_TGL_BYPASS    = 126;
     private static final int Y_TGL_TEXT      = 150;
-    private static final int Y_SEP1          = 176;
-    private static final int Y_LIST_LBL      = 184;
-    private static final int Y_LIST          = 196;
-    private static final int Y_INPUT         = 302;
-    private static final int Y_BTNS          = 324;
-    private static final int Y_SEP2          = 348;
-    private static final int Y_PRE1          = 356;
-    private static final int Y_PRE2          = 376;
-    private static final int Y_TOGGLE        = 402;
-    private static final int Y_LOG           = 450;
+    private static final int Y_TGL_ESP       = 174;
+    private static final int Y_SEP1          = 200;
+    private static final int Y_SEP1          = 200;
+    private static final int Y_LIST_LBL      = 208;
+    private static final int Y_LIST          = 220;
+    private static final int Y_INPUT         = 326;
+    private static final int Y_BTNS          = 348;
+    private static final int Y_SEP2          = 372;
+    private static final int Y_PRE1          = 380;
+    private static final int Y_PRE2          = 400;
+    private static final int Y_TOGGLE        = 426;
+    private static final int Y_LOG           = 474;
 
     private int px, py;
 
@@ -97,6 +99,7 @@ public class ScannerScreen extends Screen {
         reg(BTN_TGL_ELYTRA, px + W - 12 - 34, py + Y_TGL_ELYTRA, 34, 16);
         reg(BTN_TGL_BYPASS, px + W - 12 - 34, py + Y_TGL_BYPASS, 34, 16);
         reg(BTN_TGL_TEXT,   px + W - 12 - 34, py + Y_TGL_TEXT,   34, 16);
+        reg("tgl_esp",      px + W - 12 - 34, py + Y_TGL_ESP,    34, 16);
 
         reg(BTN_ADD,   px + 216, py + Y_INPUT, 112, 18);
         reg(BTN_DEL,   px + 12,  py + Y_BTNS,  100, 18);
@@ -185,6 +188,13 @@ public class ScannerScreen extends Screen {
         ctx.drawText(textRenderer, "Также искать текст у блока",
                 px + 14, py + Y_TGL_TEXT + 4, GuiRenderer.COL_BLACK, false);
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, py + Y_TGL_TEXT, ScanConfig.prioritizeText);
+
+        // ESP
+        ctx.drawText(textRenderer, "ESP — подсветка блоков сквозь стены",
+                px + 14, py + Y_TGL_ESP + 2, GuiRenderer.COL_BLACK, false);
+        ctx.drawText(textRenderer, "§7до " + EspRenderer.MAX_DIST + " блоков от игрока",
+                px + 14, py + Y_TGL_ESP + 11, GuiRenderer.COL_GRAY_MID, false);
+        GuiRenderer.drawToggle(ms, px + W - 12 - 34, py + Y_TGL_ESP, ScanConfig.espEnabled);
 
         // Разделитель 1
         GuiRenderer.fillRect(ms, px + 12, py + Y_SEP1, W - 24, 1, GuiRenderer.COL_GRAY_LITE);
@@ -319,6 +329,7 @@ public class ScannerScreen extends Screen {
             case BTN_TGL_ELYTRA -> { ScanConfig.onlyWhenElytra=!ScanConfig.onlyWhenElytra; ScanConfig.save(); }
             case BTN_TGL_BYPASS -> { ScanConfig.bypassAntiXray=!ScanConfig.bypassAntiXray; ScanConfig.save(); BlockScanner.restartSession(); }
             case BTN_TGL_TEXT   -> { ScanConfig.prioritizeText=!ScanConfig.prioritizeText; ScanConfig.save(); BlockScanner.restartSession(); }
+            case "tgl_esp"      -> { ScanConfig.espEnabled=!ScanConfig.espEnabled; ScanConfig.save(); }
             default -> {
                 if (id.startsWith("preset_")) {
                     String bid=id.substring(7);
