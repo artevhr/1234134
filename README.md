@@ -27,39 +27,6 @@
 
 ---
 
-## Установка
-
-1. Установить **Fabric Loader 0.15.11+** для Minecraft 1.20.1
-2. Установить **Fabric API** (скачать с modrinth.com/mod/fabric-api)
-3. Скопировать `elytrascan-1.0.0.jar` в папку `.minecraft/mods/`
-4. Запустить игру с профилем Fabric
-
----
-
-## Сборка из исходников (нужен Java 17+)
-
-```bash
-# Windows:
-gradlew build
-
-# Linux / macOS:
-chmod +x gradlew
-./gradlew build
-```
-
-Готовый JAR появится в: `build/libs/elytrascan-1.0.0.jar`
-
-> Первый запуск скачает Gradle (~130 МБ) и зависимости (~400 МБ).
-> Нужен интернет и ~600 МБ места.
-
-### Если нет gradlew:
-```bash
-gradle wrapper --gradle-version=8.3
-./gradlew build
-```
-
----
-
 ## Лог-файл
 
 Путь: `.minecraft/elytrascan_logs/`
@@ -74,28 +41,3 @@ gradle wrapper --gradle-version=8.3
 ## Параметры конфига
 
 `.minecraft/config/elytrascan.json`
-
-```json
-{
-  "scanEnabled": false,
-  "targetBlocks": ["minecraft:chest", "minecraft:spawner"],
-  "scanRadius": 3,
-  "onlyWhenElytra": true
-}
-```
-
-| Поле | Описание | Диапазон |
-|------|----------|----------|
-| `scanEnabled` | Включено ли сканирование | true/false |
-| `targetBlocks` | Список блоков для поиска | ID блоков |
-| `scanRadius` | Радиус в чанках | 1–8 (16–128 блоков) |
-| `onlyWhenElytra` | Сканировать только при полёте на элитрах | true/false |
-
----
-
-## Важно
-
-- Мод **только клиентский** — не нужен на сервере
-- Сканируются только **загруженные** чанки (в радиусе прогрузки)
-- Одни и те же координаты **не дублируются** в логе за сессию
-- При нажатии "↺ Сбросить карту" — забываются все найденные позиции и запускается новый лог
