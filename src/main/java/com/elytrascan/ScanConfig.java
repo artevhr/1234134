@@ -21,8 +21,7 @@ public class ScanConfig {
     public static int    scanRadius        = 3;   // в чанках (1 чанк = 16 блоков)
     public static boolean onlyWhenElytra   = true;
     public static boolean bypassAntiXray   = false;
-    public static boolean prioritizeText   = false;
-    public static boolean espEnabled       = false; // подсветка блоков сквозь стены
+    public static boolean prioritizeText   = false; // только блоки с текстом/именем
 
     // ── сохранение / загрузка ─────────────────────────────────
     public static void load() {
@@ -42,7 +41,6 @@ public class ScanConfig {
             onlyWhenElytra  = d.onlyWhenElytra;
             bypassAntiXray  = d.bypassAntiXray;
             prioritizeText  = d.prioritizeText;
-            espEnabled      = d.espEnabled;
         } catch (Exception e) {
             ElytraScanMod.LOGGER.error("ElytraScan: не удалось загрузить конфиг", e);
         }
@@ -57,7 +55,6 @@ public class ScanConfig {
             d.onlyWhenElytra = onlyWhenElytra;
             d.bypassAntiXray = bypassAntiXray;
             d.prioritizeText = prioritizeText;
-            d.espEnabled     = espEnabled;
             GSON.toJson(d, w);
         } catch (Exception e) {
             ElytraScanMod.LOGGER.error("ElytraScan: не удалось сохранить конфиг", e);
@@ -72,6 +69,5 @@ public class ScanConfig {
         boolean      onlyWhenElytra = true;
         boolean      bypassAntiXray = false;
         boolean      prioritizeText = false;
-        boolean      espEnabled     = false;
     }
 }

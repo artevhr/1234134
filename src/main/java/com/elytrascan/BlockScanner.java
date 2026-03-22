@@ -1,21 +1,20 @@
 package com.elytrascan;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.decoration.DisplayEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
-
+import net.minecraft.class_1297;
+import net.minecraft.class_1657;
+import net.minecraft.class_1923;
+import net.minecraft.class_1937;
+import net.minecraft.class_2338;
+import net.minecraft.class_238;
+import net.minecraft.class_2561;
+import net.minecraft.class_2586;
+import net.minecraft.class_2680;
+import net.minecraft.class_2818;
+import net.minecraft.class_310;
+import net.minecraft.class_332;
+import net.minecraft.class_7923;
+import net.minecraft.class_8113;
 import java.io.*;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -26,16 +25,15 @@ public class BlockScanner {
 
     private static final Set<Long>       scannedChunks = new HashSet<>();
     private static final Set<Long>       scannedClose  = new HashSet<>();
-    private static final Queue<ChunkPos> scanQueue     = new ArrayDeque<>();
-    private static final Set<BlockPos>   foundSet      = new HashSet<>();
-
-    // Для ESP: позиция → blockId (синхронизированная)
-    public static final Map<BlockPos, String> foundPositions =
-            Collections.synchronizedMap(new LinkedHashMap<>());
+    // Время (мс) когда чанк впервые попал в зону "вблизи" — для задержки антиксрея
+    private static final Map<Long, Long>  chunkCloseTime = new HashMap<>();
+    private static final Queue<class_1923> scanQueue     = new ArrayDeque<>();
+    private static final Set<class_2338>   foundSet      = new HashSet<>();
 
     // Порог "вплотную" для обхода антиксрея — 2 чанка по XZ (32 блока).
-    // Большинство антиксрей-плагинов раскрывают блоки в этом радиусе.
-    private static final int BYPASS_CLOSE_CHUNKS = 2;
+    private static final int  BYPASS_CLOSE_CHUNKS = 2;
+    // Задержка перед сканированием в режиме обхода (мс) — сервер успевает прислать настоящие блоки
+    private static final long BYPASS_DELAY_MS     = 3000L;
 
     public static volatile int    totalFound    = 0;
     public static volatile int    chunksScanned = 0;
@@ -51,88 +49,93 @@ public class BlockScanner {
     private static String      currentLogName = "";
 
     // ── главный тик ──────────────────────────────────────────────────────────
-    public static void tick(MinecraftClient mc) {
+    public static void tick(class_310 mc) {
         if (!ScanConfig.scanEnabled)               return;
-        if (mc.player == null || mc.world == null) return;
+        if (mc.field_1724 == null || mc.field_1687 == null) return;
 
-        PlayerEntity player = mc.player;
-        if (ScanConfig.onlyWhenElytra && !player.isFallFlying()) return;
+        class_1657 player = mc.field_1724;
+        if (ScanConfig.onlyWhenElytra && !player.method_6128()) return;
         if (ScanConfig.targetBlocks.isEmpty())     return;
 
         String worldName = resolveWorldName(mc);
         if (!worldName.equals(lastWorld)) resetForWorld(worldName);
 
-        ChunkPos pc = new ChunkPos(player.getBlockPos());
+        class_1923 pc = new class_1923(player.method_24515());
         int r = ScanConfig.scanRadius;
 
-        for (int cx = pc.x - r; cx <= pc.x + r; cx++) {
-            for (int cz = pc.z - r; cz <= pc.z + r; cz++) {
-                if (!mc.world.getChunkManager().isChunkLoaded(cx, cz)) continue;
-                long key = ChunkPos.toLong(cx, cz);
+        for (int cx = pc.field_9181 - r; cx <= pc.field_9181 + r; cx++) {
+            for (int cz = pc.field_9180 - r; cz <= pc.field_9180 + r; cz++) {
+                if (!mc.field_1687.method_2935().method_12123(cx, cz)) continue;
+                long key = class_1923.method_8331(cx, cz);
 
                 if (ScanConfig.bypassAntiXray) {
-                    // При полёте на элитрах игрок пролетает над каждым чанком
-                    // на расстоянии ≤2 по XZ — антиксрей к этому моменту
-                    // уже раскрыл блоки. Дальние чанки сбрасываем.
-                    int distX = Math.abs(cx - pc.x);
-                    int distZ = Math.abs(cz - pc.z);
+                    int distX = Math.abs(cx - pc.field_9181);
+                    int distZ = Math.abs(cz - pc.field_9180);
                     boolean isClose = distX <= BYPASS_CLOSE_CHUNKS
                                    && distZ <= BYPASS_CLOSE_CHUNKS;
 
-                    if (isClose && !scannedClose.contains(key)) {
-                        scannedClose.add(key);
-                        scannedChunks.add(key);
-                        scanQueue.add(new ChunkPos(cx, cz));
-                    } else if (!isClose) {
-                        scannedClose.remove(key); // улетели — сброс
+                    if (isClose) {
+                        if (!scannedClose.contains(key)) {
+                            // Запоминаем время первого появления в зоне
+                            chunkCloseTime.putIfAbsent(key, System.currentTimeMillis());
+                            // Сканируем только если прошла задержка
+                            long closeTime = chunkCloseTime.get(key);
+                            if (System.currentTimeMillis() - closeTime >= BYPASS_DELAY_MS) {
+                                scannedClose.add(key);
+                                scannedChunks.add(key);
+                                scanQueue.add(new class_1923(cx, cz));
+                                chunkCloseTime.remove(key);
+                            }
+                        }
+                    } else {
+                        // Улетели — сброс, при следующем сближении заново отсчитаем задержку
+                        scannedClose.remove(key);
+                        chunkCloseTime.remove(key);
                     }
                 } else {
                     if (!scannedChunks.contains(key)) {
                         scannedChunks.add(key);
-                        scanQueue.add(new ChunkPos(cx, cz));
+                        scanQueue.add(new class_1923(cx, cz));
                     }
                 }
             }
         }
 
         for (int i = 0; i < 2 && !scanQueue.isEmpty(); i++) {
-            ChunkPos cp = scanQueue.poll();
-            if (cp != null) processChunk(mc.world, cp);
+            class_1923 cp = scanQueue.poll();
+            if (cp != null) processChunk(mc.field_1687, cp);
         }
     }
 
     // ── сканирование чанка ───────────────────────────────────────────────────
-    private static void processChunk(World world, ChunkPos cp) {
-        WorldChunk chunk = world.getChunk(cp.x, cp.z);
-        int baseX   = cp.getStartX();
-        int baseZ   = cp.getStartZ();
-        int bottomY = world.getBottomY();
-        int topY    = world.getTopY();
+    private static void processChunk(class_1937 world, class_1923 cp) {
+        class_2818 chunk = world.method_8497(cp.field_9181, cp.field_9180);
+        int baseX   = cp.method_8326();
+        int baseZ   = cp.method_8328();
+        int bottomY = world.method_31607();
+        int topY    = world.method_31600();
 
         List<FoundBlock> newBlocks = new ArrayList<>();
 
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 for (int y = bottomY; y < topY; y++) {
-                    BlockPos pos = new BlockPos(baseX + x, y, baseZ + z);
+                    class_2338 pos = new class_2338(baseX + x, y, baseZ + z);
                     if (foundSet.contains(pos)) continue;
 
-                    BlockState state = chunk.getBlockState(pos);
-                    if (state.isAir()) continue;
+                    class_2680 state = chunk.method_8320(pos);
+                    if (state.method_26215()) continue;
 
-                    String id = Registries.BLOCK.getId(state.getBlock()).toString();
+                    String id = class_7923.field_41175.method_10221(state.method_26204()).toString();
                     if (!ScanConfig.targetBlocks.contains(id)) continue;
 
-                    String label = ScanConfig.prioritizeText
-                            ? findTextAtBlock(world, pos)
-                            : null;
+                    String label = findTextAtBlock(world, pos);
 
-                    // Режим "также с текстом" выключен — просто пишем блок без поиска текста
-                    // Режим включён — ищем текст и пишем его рядом с блоком (блок пишется всегда)
+                    // Режим "только с текстом" — пропустить блоки без надписи
+                    if (ScanConfig.prioritizeText && label == null) continue;
 
-                    foundSet.add(pos.toImmutable());
-                    foundPositions.put(pos.toImmutable(), id);
-                    newBlocks.add(new FoundBlock(pos.toImmutable(), id, label));
+                    foundSet.add(pos.method_10062());
+                    newBlocks.add(new FoundBlock(pos.method_10062(), id, label));
                     totalFound++;
                     if (label != null) textFound++;
                 }
@@ -151,15 +154,15 @@ public class BlockScanner {
     }
 
     // ── поиск текста у/над блоком ─────────────────────────────────────────────
-    private static String findTextAtBlock(World world, BlockPos pos) {
+    private static String findTextAtBlock(class_1937 world, class_2338 pos) {
         // 1. CustomName блок-энтити через NBT (работает для любого блок-энтити,
         //    не зависит от маппингов Nameable)
-        BlockEntity be = world.getBlockEntity(pos);
+        class_2586 be = world.method_8321(pos);
         if (be != null) {
-            net.minecraft.nbt.NbtCompound nbt = be.createNbt();
-            if (nbt.contains("CustomName")) {
+            net.minecraft.class_2487 nbt = be.method_38244();
+            if (nbt.method_10545("CustomName")) {
                 try {
-                    Text t = Text.Serializer.fromJson(nbt.getString("CustomName"));
+                    class_2561 t = class_2561.class_2562.method_10877(nbt.method_10558("CustomName"));
                     if (t != null) {
                         String s = strip(t.getString());
                         if (!s.isBlank()) return s;
@@ -169,15 +172,15 @@ public class BlockScanner {
         }
 
         // 2. TextDisplay энтити над блоком (getDisplayName() — публичный метод Entity)
-        Box box = new Box(
-                pos.getX() - 1, pos.getY() - 0.5, pos.getZ() - 1,
-                pos.getX() + 2, pos.getY() + 3.5,  pos.getZ() + 2
+        class_238 box = new class_238(
+                pos.method_10263() - 1, pos.method_10264() - 0.5, pos.method_10260() - 1,
+                pos.method_10263() + 2, pos.method_10264() + 3.5,  pos.method_10260() + 2
         );
-        List<Entity> entities = world.getEntitiesByClass(
-                Entity.class, box,
-                e -> e instanceof DisplayEntity.TextDisplayEntity);
+        List<class_1297> entities = world.method_8390(
+                class_1297.class, box,
+                e -> e instanceof class_8113.class_8123);
         if (!entities.isEmpty()) {
-            String s = strip(entities.get(0).getDisplayName().getString());
+            String s = strip(entities.get(0).method_5476().getString());
             if (!s.isBlank()) return s;
         }
 
@@ -189,20 +192,20 @@ public class BlockScanner {
     }
 
     // ── запись в лог ─────────────────────────────────────────────────────────
-    private static void writeToLog(List<FoundBlock> blocks, World world) {
+    private static void writeToLog(List<FoundBlock> blocks, class_1937 world) {
         if (logWriter == null) return;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        class_310 mc = class_310.method_1551();
         String ts  = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        String dim = world.getRegistryKey().getValue().toString();
-        String pXYZ = mc.player != null
+        String dim = world.method_27983().method_29177().toString();
+        String pXYZ = mc.field_1724 != null
                 ? String.format("%.0f / %.0f / %.0f",
-                  mc.player.getX(), mc.player.getY(), mc.player.getZ()) : "?";
+                  mc.field_1724.method_23317(), mc.field_1724.method_23318(), mc.field_1724.method_23321()) : "?";
 
         for (FoundBlock b : blocks) {
             logWriter.printf("[%s] [%s]  %-40s  X=%-6d  Y=%-4d  Z=%-6d  (игрок: %s)%n",
                     ts, dim, b.blockId,
-                    b.pos.getX(), b.pos.getY(), b.pos.getZ(), pXYZ);
+                    b.pos.method_10263(), b.pos.method_10264(), b.pos.method_10260(), pXYZ);
             if (b.label != null) {
                 logWriter.printf("         >>> Текст: \"%s\"%n", b.label);
             }
@@ -210,16 +213,16 @@ public class BlockScanner {
         logWriter.flush();
     }
 
-    private record FoundBlock(BlockPos pos, String blockId, String label) {}
+    private record FoundBlock(class_2338 pos, String blockId, String label) {}
 
     // ── сброс/открытие лога ──────────────────────────────────────────────────
     public static void resetForWorld(String worldName) {
         lastWorld = worldName;
         scannedChunks.clear();
         scannedClose.clear();
+        chunkCloseTime.clear();
         scanQueue.clear();
         foundSet.clear();
-        foundPositions.clear();
         totalFound = chunksScanned = textFound = 0;
 
         if (logWriter != null) {
@@ -256,15 +259,15 @@ public class BlockScanner {
     }
 
     public static void restartSession() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.world != null) resetForWorld(resolveWorldName(mc));
+        class_310 mc = class_310.method_1551();
+        if (mc.field_1687 != null) resetForWorld(resolveWorldName(mc));
     }
 
-    public static String resolveWorldName(MinecraftClient mc) {
-        if (mc.isIntegratedServerRunning() && mc.getServer() != null)
-            return mc.getServer().getSaveProperties().getLevelName();
-        if (mc.getCurrentServerEntry() != null)
-            return mc.getCurrentServerEntry().address;
+    public static String resolveWorldName(class_310 mc) {
+        if (mc.method_1496() && mc.method_1576() != null)
+            return mc.method_1576().method_27728().method_150();
+        if (mc.method_1558() != null)
+            return mc.method_1558().field_3761;
         return "unknown";
     }
 
@@ -274,16 +277,16 @@ public class BlockScanner {
     }
 
     // ── HUD ──────────────────────────────────────────────────────────────────
-    public static void renderHud(DrawContext ctx) {
+    public static void renderHud(class_332 ctx) {
         if (!ScanConfig.scanEnabled) return;
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.options.hudHidden || mc.currentScreen != null) return;
+        class_310 mc = class_310.method_1551();
+        if (mc.field_1690.field_1842 || mc.field_1755 != null) return;
 
-        boolean active = mc.player != null
-                && (!ScanConfig.onlyWhenElytra || mc.player.isFallFlying());
+        boolean active = mc.field_1724 != null
+                && (!ScanConfig.onlyWhenElytra || mc.field_1724.method_6128());
 
-        int sw = mc.getWindow().getScaledWidth();
-        int sh = mc.getWindow().getScaledHeight();
+        int sw = mc.method_22683().method_4486();
+        int sh = mc.method_22683().method_4502();
         int x = 4, y = sh - 31;
 
         String statusLine = active
@@ -297,21 +300,21 @@ public class BlockScanner {
                 + (ScanConfig.prioritizeText ? " §e[только текст]" : "");
 
         int hudH = modeLine.isBlank() ? 20 : 29;
-        ctx.fill(x - 2, y - 2, x + 215, y + hudH, 0x99000000);
-        ctx.drawTextWithShadow(mc.textRenderer, statusLine, x, y,     0xFFFFFF);
-        ctx.drawTextWithShadow(mc.textRenderer, foundLine,  x, y + 9, 0xFFFFFF);
+        ctx.method_25294(x - 2, y - 2, x + 215, y + hudH, 0x99000000);
+        ctx.method_25303(mc.field_1772, statusLine, x, y,     0xFFFFFF);
+        ctx.method_25303(mc.field_1772, foundLine,  x, y + 9, 0xFFFFFF);
         if (!modeLine.isBlank())
-            ctx.drawTextWithShadow(mc.textRenderer, modeLine, x, y + 18, 0xFFFFFF);
+            ctx.method_25303(mc.field_1772, modeLine, x, y + 18, 0xFFFFFF);
 
         long now = System.currentTimeMillis();
         if (now < flashUntil) {
             long rem = flashUntil - now;
             float alpha = rem < 700 ? (rem / 700f) : 1f;
             int a = (int)(alpha * 0xBB);
-            int fw = mc.textRenderer.getWidth("§a✔ " + flashMsg) + 10;
+            int fw = mc.field_1772.method_1727("§a✔ " + flashMsg) + 10;
             int fx = (sw - fw) / 2, fy = sh / 2 + 30;
-            ctx.fill(fx - 4, fy - 2, fx + fw, fy + 11, (a << 24) | 0x002200);
-            ctx.drawCenteredTextWithShadow(mc.textRenderer, "§a✔ " + flashMsg,
+            ctx.method_25294(fx - 4, fy - 2, fx + fw, fy + 11, (a << 24) | 0x002200);
+            ctx.method_25300(mc.field_1772, "§a✔ " + flashMsg,
                     sw / 2, fy, 0x55FF55);
         }
     }
