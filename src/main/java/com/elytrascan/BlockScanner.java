@@ -30,8 +30,8 @@ public class BlockScanner {
     private static final Queue<ChunkPos> scanQueue      = new ArrayDeque<>();
     private static final Set<BlockPos>   foundSet       = new HashSet<>();
 
-    private static final int  BYPASS_CLOSE_CHUNKS = 2;
-    private static final long BYPASS_DELAY_MS     = 3000L;
+    private static final int  BYPASS_CLOSE_CHUNKS = 1;  // 1 чанк = 16 блоков — engine-mode 1 раскрывает блоки сразу
+    private static final long BYPASS_DELAY_MS     = 500L; // минимальная задержка — один тик сервера
 
     public static volatile int    totalFound    = 0;
     public static volatile int    chunksScanned = 0;
