@@ -104,28 +104,11 @@ public class ScannerScreen extends class_437 {
         reg(BTN_TOGGLE, px + 12, py + Y_TOGGLE, W - 24, 26);
 
         // Пресеты ряд 1
-        String[][] row1 = {
-            {"Сундук","minecraft:chest"},{"Спавнер","minecraft:spawner"},
-            {"Зашит.","minecraft:ender_chest"},{"Обломки","minecraft:ancient_debris"},
-            {"Баррель","minecraft:barrel"}
-        };
+        // Серверные пресеты
         int presX = px + 12;
-        for (String[] p : row1) {
-            int pw = (int) GuiRenderer.presetPillWidth(field_22793, p[0]);
-            reg("preset_" + p[1], presX, py + Y_PRE1, pw, 16);
-            presX += pw + 5;
-        }
-
-        // Пресеты ряд 2
-        String[][] row2 = {
-            {"Алмаз","minecraft:diamond_ore"},{"Изумруд","minecraft:emerald_ore"},
-            {"Нет.руда","minecraft:nether_gold_ore"},{"Кварц","minecraft:nether_quartz_ore"},
-            {"Шалкер","minecraft:shulker_box"}
-        };
-        presX = px + 12;
-        for (String[] p : row2) {
-            int pw = (int) GuiRenderer.presetPillWidth(field_22793, p[0]);
-            reg("preset_" + p[1], presX, py + Y_PRE2, pw, 16);
+        for (String label : new String[]{"FanTime", "KubWorld"}) {
+            int pw = (int) GuiRenderer.presetPillWidth(field_22793, label);
+            reg("server_" + label, presX, py + Y_PRE1, pw, 16);
             presX += pw + 5;
         }
     }
@@ -246,15 +229,14 @@ public class ScannerScreen extends class_437 {
 
         // Разделитель 2 + метка пресеты
         GuiRenderer.fillRect(ms, px+12, py+Y_SEP2, W-24, 1, GuiRenderer.COL_GRAY_LITE);
-        ctx.method_51433(field_22793, "§8ПРЕСЕТЫ", px+14, py+Y_SEP2-10, 0xAAAAAA, false);
+        ctx.method_51433(field_22793, "§8СЕРВЕРНЫЕ ПРЕСЕТЫ", px+14, py+Y_SEP2-10, 0xAAAAAA, false);
 
-        // Пресеты
         for (Btn b : buttons) {
-            if (!b.id().startsWith("preset_")) continue;
-            String blockId = b.id().substring(7);
-            boolean active = ScanConfig.targetBlocks.contains(blockId);
+            if (!b.id().startsWith("server_")) continue;
+            String label = b.id().substring(7);
+            boolean active = isServerPresetActive(label);
             GuiRenderer.drawPresetPill(ctx, field_22793,
-                    b.x(), b.y(), presetLabel(blockId), isHovBtn(b), active);
+                    b.x(), b.y(), label, isHovBtn(b), active);
         }
 
         // ── Главная кнопка ────────────────────────────────────────────────────
@@ -319,11 +301,8 @@ public class ScannerScreen extends class_437 {
             case BTN_TGL_BYPASS -> { ScanConfig.bypassAntiXray=!ScanConfig.bypassAntiXray; ScanConfig.save(); BlockScanner.restartSession(); }
             case BTN_TGL_TEXT   -> { ScanConfig.prioritizeText=!ScanConfig.prioritizeText; ScanConfig.save(); BlockScanner.restartSession(); }
             default -> {
-                if (id.startsWith("preset_")) {
-                    String bid=id.substring(7);
-                    if (!ScanConfig.targetBlocks.contains(bid)) ScanConfig.targetBlocks.add(bid);
-                    else ScanConfig.targetBlocks.remove(bid);
-                    ScanConfig.save();
+                if (id.startsWith("server_")) {
+                    applyServerPreset(id.substring(7));
                 }
             }
         }
@@ -348,6 +327,49 @@ public class ScannerScreen extends class_437 {
             selectedIdx=Math.min(selectedIdx,list.size()-1);
             scrollOff=Math.max(0,Math.min(scrollOff,Math.max(0,list.size()-LIST_ROWS)));
         }
+    }
+
+    private static final List<String> FANTIME_BLOCKS = List.of(
+            "minecraft:iron_block",
+            "minecraft:gold_block",
+            "minecraft:diamond_block",
+            "minecraft:emerald_block",
+            "minecraft:diamond_ore",
+            "minecraft:emerald_ore"
+    );
+
+    private static final List<String> KUBWORLD_BLOCKS = List.of(
+            // будет заполнено позже
+    );
+
+    private void applyServerPreset(String server) {
+        List<String> preset = switch (server) {
+            case "FanTime"  -> FANTIME_BLOCKS;
+            case "KubWorld" -> KUBWORLD_BLOCKS;
+            default -> List.of();
+        };
+        if (preset.isEmpty()) return;
+
+        // Если все блоки пресета уже есть — убираем (тоггл)
+        if (ScanConfig.targetBlocks.containsAll(preset)) {
+            ScanConfig.targetBlocks.removeAll(preset);
+        } else {
+            for (String b : preset) {
+                if (!ScanConfig.targetBlocks.contains(b))
+                    ScanConfig.targetBlocks.add(b);
+            }
+        }
+        ScanConfig.save();
+        BlockScanner.restartSession();
+    }
+
+    private boolean isServerPresetActive(String server) {
+        List<String> preset = switch (server) {
+            case "FanTime"  -> FANTIME_BLOCKS;
+            case "KubWorld" -> KUBWORLD_BLOCKS;
+            default -> List.of();
+        };
+        return !preset.isEmpty() && ScanConfig.targetBlocks.containsAll(preset);
     }
 
     private boolean isHov(String id) { for (Btn b:buttons) if(b.id().equals(id)) return isHovBtn(b); return false; }

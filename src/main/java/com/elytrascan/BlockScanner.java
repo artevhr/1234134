@@ -192,6 +192,8 @@ public class BlockScanner {
     }
 
     // ── запись в лог ─────────────────────────────────────────────────────────
+    // Блоки одного типа в радиусе 16 блоков объединяются в кластер —
+    // пишется одна строка с центром кластера и количеством.
     private static void writeToLog(List<FoundBlock> blocks, class_1937 world) {
         if (logWriter == null) return;
 
@@ -202,15 +204,65 @@ public class BlockScanner {
                 ? String.format("%.0f / %.0f / %.0f",
                   mc.field_1724.method_23317(), mc.field_1724.method_23318(), mc.field_1724.method_23321()) : "?";
 
-        for (FoundBlock b : blocks) {
-            logWriter.printf("[%s] [%s]  %-40s  X=%-6d  Y=%-4d  Z=%-6d  (игрок: %s)%n",
-                    ts, dim, b.blockId,
-                    b.pos.method_10263(), b.pos.method_10264(), b.pos.method_10260(), pXYZ);
-            if (b.label != null) {
-                logWriter.printf("         >>> Текст: \"%s\"%n", b.label);
+        // Кластеризация: группируем блоки одного типа в радиусе 16 блоков
+        List<FoundBlock> remaining = new ArrayList<>(blocks);
+        List<List<FoundBlock>> clusters = new ArrayList<>();
+
+        while (!remaining.isEmpty()) {
+            FoundBlock seed = remaining.remove(0);
+            List<FoundBlock> cluster = new ArrayList<>();
+            cluster.add(seed);
+
+            Iterator<FoundBlock> it = remaining.iterator();
+            while (it.hasNext()) {
+                FoundBlock other = it.next();
+                if (other.blockId.equals(seed.blockId) && distance(seed.pos, other.pos) <= 16.0) {
+                    cluster.add(other);
+                    it.remove();
+                }
+            }
+            clusters.add(cluster);
+        }
+
+        // Записываем каждый кластер
+        for (List<FoundBlock> cluster : clusters) {
+            if (cluster.size() == 1) {
+                // Одиночный блок — стандартная строка
+                FoundBlock b = cluster.get(0);
+                logWriter.printf("[%s] [%s]  %-40s  X=%-6d  Y=%-4d  Z=%-6d  (игрок: %s)%n",
+                        ts, dim, b.blockId,
+                        b.pos.method_10263(), b.pos.method_10264(), b.pos.method_10260(), pXYZ);
+                if (b.label != null) {
+                    logWriter.printf("         >>> Текст: \"%s\"%n", b.label);
+                }
+            } else {
+                // Кластер — центр + количество
+                double cx = cluster.stream().mapToInt(b -> b.pos.method_10263()).average().orElse(0);
+                double cy = cluster.stream().mapToInt(b -> b.pos.method_10264()).average().orElse(0);
+                double cz = cluster.stream().mapToInt(b -> b.pos.method_10260()).average().orElse(0);
+
+                String blockId = cluster.get(0).blockId;
+                logWriter.printf("[%s] [%s]  %-40s  X=%-6d  Y=%-4d  Z=%-6d  [кластер: %d блоков]  (игрок: %s)%n",
+                        ts, dim, blockId,
+                        (int) Math.round(cx), (int) Math.round(cy), (int) Math.round(cz),
+                        cluster.size(), pXYZ);
+
+                // Если у блоков из кластера есть текст — пишем все уникальные
+                cluster.stream()
+                        .filter(b -> b.label != null)
+                        .map(b -> b.label)
+                        .distinct()
+                        .forEach(lbl -> logWriter.printf("         >>> Текст: \"%s\"%n", lbl));
             }
         }
         logWriter.flush();
+    }
+
+    private static double distance(class_2338 a, class_2338 b) {
+        int dx = a.method_10263() - b.method_10263();
+        int dy = a.method_10264() - b.method_10264();
+        int dz = a.method_10260() - b.method_10260();
+        return Math.sqrt(dx*dx + dy*dy + dz*dz);
     }
 
     private record FoundBlock(class_2338 pos, String blockId, String label) {}
