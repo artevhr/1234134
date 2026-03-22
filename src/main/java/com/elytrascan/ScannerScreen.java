@@ -1,41 +1,22 @@
 package com.elytrascan;
 
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.Text;
+
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.class_2561;
-import net.minecraft.class_332;
-import net.minecraft.class_342;
-import net.minecraft.class_437;
-import net.minecraft.class_4587;
 
-/**
- * Layout (H=460):
- *   0   – 52  : шапка (чёрная)
- *   64  – 64  : метка НАСТРОЙКИ
- *   74  – 94  : радиус (кнопки −/+)
- *   102 – 118 : тогл «только элитры»
- *   126 – 142 : тогл «обход антиксрея»
- *   150 – 166 : тогл «также с текстом»
- *   176        : разделитель
- *   184        : метка ЦЕЛЕВЫЕ БЛОКИ
- *   196 – 292 : список (6 × 16 + 6 = 102)
- *   300 – 318 : поле ввода + кнопка Добавить
- *   322 – 340 : кнопки Удалить / Сбросить / Закрыть
- *   348        : разделитель + метка пресеты
- *   356 – 372 : пресеты ряд 1
- *   376 – 392 : пресеты ряд 2
- *   400 – 426 : главная кнопка
- *   432        : путь лога
- */
-public class ScannerScreen extends class_437 {
+public class ScannerScreen extends Screen {
 
     private static final int W   = 340;
-    private static final int H   = 460;
+    private static final int H   = 500;
     private static final int R   = 8;
     private static final int LIST_ROWS = 6;
     private static final int ROW_H     = 16;
 
-    // Y-константы (относительно py) — одно место для render И init
     private static final int Y_SETTINGS_LBL = 64;
     private static final int Y_RADIUS        = 74;
     private static final int Y_TGL_ELYTRA    = 102;
@@ -47,16 +28,14 @@ public class ScannerScreen extends class_437 {
     private static final int Y_INPUT         = 302;
     private static final int Y_BTNS          = 324;
     private static final int Y_SEP2          = 348;
-    private static final int Y_PRE1          = 356;
-    private static final int Y_PRE2          = 376;
-    private static final int Y_TOGGLE        = 402;
-    private static final int Y_LOG           = 450;
+    private static final int Y_PRE1          = 358;
+    private static final int Y_TOGGLE        = 384;
+    private static final int Y_LOG           = 460;
 
     private int px, py;
-
     private int    selectedIdx = -1;
     private int    scrollOff   = 0;
-    private class_342 blockInput;
+    private TextFieldWidget blockInput;
 
     private record Btn(int x, int y, int w, int h, String id) {}
     private final List<Btn> buttons = new ArrayList<>();
@@ -73,41 +52,36 @@ public class ScannerScreen extends class_437 {
     private static final String BTN_TGL_BYPASS  = "tgl_bypass";
     private static final String BTN_TGL_TEXT    = "tgl_text";
 
-    public ScannerScreen() { super(class_2561.method_43470("ElytraScan")); }
+    public ScannerScreen() { super(Text.literal("ElytraScan")); }
 
     @Override
-    protected void method_25426() {
-        px = (field_22789  - W) / 2;
-        py = (field_22790 - H) / 2;
+    protected void init() {
+        px = (width  - W) / 2;
+        py = (height - H) / 2;
         buttons.clear();
 
-        // Текстовое поле
-        blockInput = new class_342(field_22793,
-                px + 12, py + Y_INPUT, 200, 18, class_2561.method_43470("Block ID"));
-        blockInput.method_1880(250);
-        blockInput.method_47404(class_2561.method_43470("minecraft:chest"));
-        blockInput.method_1868(0x0D0D0D);
-        method_37063(blockInput);
+        blockInput = new TextFieldWidget(textRenderer,
+                px + 12, py + Y_INPUT, 200, 18, Text.literal("Block ID"));
+        blockInput.setMaxLength(250);
+        blockInput.setPlaceholder(Text.literal("minecraft:chest"));
+        blockInput.setEditableColor(0x0D0D0D);
+        addDrawableChild(blockInput);
 
-        // Кнопки — координаты строго совпадают с render()
-        reg(BTN_MINUS,     px + 12,           py + Y_RADIUS,     24, 20);
-        reg(BTN_PLUS,      px + 94,           py + Y_RADIUS,     24, 20);
-
+        reg(BTN_MINUS,      px + 12,           py + Y_RADIUS,     24, 20);
+        reg(BTN_PLUS,       px + 94,           py + Y_RADIUS,     24, 20);
         reg(BTN_TGL_ELYTRA, px + W - 12 - 34, py + Y_TGL_ELYTRA, 34, 16);
         reg(BTN_TGL_BYPASS, px + W - 12 - 34, py + Y_TGL_BYPASS, 34, 16);
         reg(BTN_TGL_TEXT,   px + W - 12 - 34, py + Y_TGL_TEXT,   34, 16);
+        reg(BTN_ADD,        px + 216, py + Y_INPUT,  112, 18);
+        reg(BTN_DEL,        px + 12,  py + Y_BTNS,   100, 18);
+        reg(BTN_RESET,      px + 118, py + Y_BTNS,   105, 18);
+        reg(BTN_CLOSE,      px + 229, py + Y_BTNS,    99, 18);
+        reg(BTN_TOGGLE,     px + 12,  py + Y_TOGGLE, W - 24, 26);
 
-        reg(BTN_ADD,   px + 216, py + Y_INPUT, 112, 18);
-        reg(BTN_DEL,   px + 12,  py + Y_BTNS,  100, 18);
-        reg(BTN_RESET, px + 118, py + Y_BTNS,  105, 18);
-        reg(BTN_CLOSE, px + 229, py + Y_BTNS,   99, 18);
-        reg(BTN_TOGGLE, px + 12, py + Y_TOGGLE, W - 24, 26);
-
-        // Пресеты ряд 1
         // Серверные пресеты
         int presX = px + 12;
         for (String label : new String[]{"FanTime", "KubWorld"}) {
-            int pw = (int) GuiRenderer.presetPillWidth(field_22793, label);
+            int pw = (int) GuiRenderer.presetPillWidth(textRenderer, label);
             reg("server_" + label, presX, py + Y_PRE1, pw, 16);
             presX += pw + 5;
         }
@@ -118,70 +92,67 @@ public class ScannerScreen extends class_437 {
     }
 
     @Override
-    public void method_25394(class_332 ctx, int mx, int my, float delta) {
+    public void render(DrawContext ctx, int mx, int my, float delta) {
         mouseX = mx; mouseY = my;
-        class_4587 ms = ctx.method_51448();
+        MatrixStack ms = ctx.getMatrices();
 
-        method_25420(ctx);
+        renderBackground(ctx);
         GuiRenderer.drawShadow(ms, px, py, W, H, R);
         GuiRenderer.fillRoundedRect(ms, px, py, W, H, R, GuiRenderer.COL_BG);
 
-        // ── Шапка ─────────────────────────────────────────────────────────────
+        // Шапка
         GuiRenderer.fillRoundedRect(ms, px, py, W, 52, R, GuiRenderer.COL_BLACK);
         GuiRenderer.fillRect(ms, px, py + R, W, 52 - R, GuiRenderer.COL_BLACK);
 
         String dot = ScanConfig.scanEnabled ? "§a●" : "§c●";
-        ctx.method_25303(field_22793, dot, px + 14, py + 11, 0xFFFFFF);
-        ctx.method_25303(field_22793, "ElytraScan", px + 26, py + 11, 0xFFFFFF);
+        ctx.drawTextWithShadow(textRenderer, dot, px + 14, py + 11, 0xFFFFFF);
+        ctx.drawTextWithShadow(textRenderer, "ElytraScan", px + 26, py + 11, 0xFFFFFF);
 
         String stats = "Найдено: " + BlockScanner.totalFound
                 + "   Чанков: " + BlockScanner.chunksScanned
                 + (BlockScanner.textFound > 0 ? "   Текст: " + BlockScanner.textFound : "");
-        ctx.method_25303(field_22793, "§7" + stats, px + 14, py + 28, 0xAAAAAA);
+        ctx.drawTextWithShadow(textRenderer, "§7" + stats, px + 14, py + 28, 0xAAAAAA);
 
         String world = BlockScanner.lastWorld.isEmpty() ? "—" : BlockScanner.lastWorld;
         if (world.length() > 36) world = world.substring(0, 34) + "…";
-        ctx.method_25303(field_22793, "§8" + world, px + 14, py + 39, 0x777777);
+        ctx.drawTextWithShadow(textRenderer, "§8" + world, px + 14, py + 39, 0x777777);
 
-        // ── Настройки ─────────────────────────────────────────────────────────
-        ctx.method_51433(field_22793, "§8НАСТРОЙКИ", px + 14, py + Y_SETTINGS_LBL, 0xAAAAAA, false);
+        // Настройки
+        ctx.drawText(textRenderer, "§8НАСТРОЙКИ", px + 14, py + Y_SETTINGS_LBL, 0xAAAAAA, false);
 
-        // Радиус
-        ctx.method_51433(field_22793, "Радиус сканирования", px + 14, py + Y_RADIUS - 11, GuiRenderer.COL_GRAY_DARK, false);
-        GuiRenderer.drawButton(ctx, field_22793, px + 12, py + Y_RADIUS, 24, 20, "−", isHov(BTN_MINUS), false);
+        ctx.drawText(textRenderer, "Радиус сканирования", px + 14, py + Y_RADIUS - 11, GuiRenderer.COL_GRAY_DARK, false);
+        GuiRenderer.drawButton(ctx, textRenderer, px + 12, py + Y_RADIUS, 24, 20, "−", isHov(BTN_MINUS), false);
         String radVal = ScanConfig.scanRadius + " чанк  ≈ " + (ScanConfig.scanRadius * 16) + " бл.";
-        ctx.method_51433(field_22793, radVal, px + 42, py + Y_RADIUS + 6, GuiRenderer.COL_BLACK, false);
-        GuiRenderer.drawButton(ctx, field_22793, px + 94, py + Y_RADIUS, 24, 20, "+", isHov(BTN_PLUS), false);
+        ctx.drawText(textRenderer, radVal, px + 42, py + Y_RADIUS + 6, GuiRenderer.COL_BLACK, false);
+        GuiRenderer.drawButton(ctx, textRenderer, px + 94, py + Y_RADIUS, 24, 20, "+", isHov(BTN_PLUS), false);
 
-        // Тоглы
-        ctx.method_51433(field_22793, "Только при полёте на элитрах",
+        ctx.drawText(textRenderer, "Только при полёте на элитрах",
                 px + 14, py + Y_TGL_ELYTRA + 4, GuiRenderer.COL_BLACK, false);
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, py + Y_TGL_ELYTRA, ScanConfig.onlyWhenElytra);
 
-        ctx.method_51433(field_22793, "Обход замены блоков",
+        ctx.drawText(textRenderer, "Обход замены блоков",
                 px + 14, py + Y_TGL_BYPASS + 2, GuiRenderer.COL_BLACK, false);
-        ctx.method_51433(field_22793, "§7сканировать только вблизи",
+        ctx.drawText(textRenderer, "§7сканировать только вблизи",
                 px + 14, py + Y_TGL_BYPASS + 11, GuiRenderer.COL_GRAY_MID, false);
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, py + Y_TGL_BYPASS, ScanConfig.bypassAntiXray);
 
-        ctx.method_51433(field_22793, "Также искать текст у блока",
+        ctx.drawText(textRenderer, "Также искать текст у блока",
                 px + 14, py + Y_TGL_TEXT + 4, GuiRenderer.COL_BLACK, false);
         GuiRenderer.drawToggle(ms, px + W - 12 - 34, py + Y_TGL_TEXT, ScanConfig.prioritizeText);
 
-        // Разделитель 1
         GuiRenderer.fillRect(ms, px + 12, py + Y_SEP1, W - 24, 1, GuiRenderer.COL_GRAY_LITE);
 
-        // ── Список ────────────────────────────────────────────────────────────
-        ctx.method_51433(field_22793, "§8ЦЕЛЕВЫЕ БЛОКИ", px + 14, py + Y_LIST_LBL, 0xAAAAAA, false);
+        // Список
+        ctx.drawText(textRenderer, "§8ЦЕЛЕВЫЕ БЛОКИ", px + 14, py + Y_LIST_LBL, 0xAAAAAA, false);
         int cnt = ScanConfig.targetBlocks.size();
         {
-            int bx = px + 14 + field_22793.method_1727("ЦЕЛЕВЫЕ БЛОКИ") + 8;
-            String cs = cnt > 0 ? String.valueOf(cnt) : "0";
-            int bw = field_22793.method_1727(cs) + 10;
+            int bx = px + 14 + textRenderer.getWidth("ЦЕЛЕВЫЕ БЛОКИ") + 8;
+            String cs = String.valueOf(cnt);
+            int bw = textRenderer.getWidth(cs) + 10;
             GuiRenderer.fillRoundedRect(ms, bx, py + Y_LIST_LBL - 2, bw, 13, 6,
                     cnt > 0 ? GuiRenderer.COL_BLACK : GuiRenderer.COL_GRAY_MID);
-            ctx.method_51433(field_22793, cs,
-                    bx + (bw - field_22793.method_1727(cs)) / 2,
+            ctx.drawText(textRenderer, cs,
+                    bx + (bw - textRenderer.getWidth(cs)) / 2,
                     py + Y_LIST_LBL + 1, 0xFFFFFF, false);
         }
 
@@ -200,10 +171,9 @@ public class ScannerScreen extends class_437 {
                 GuiRenderer.fillRoundedRect(ms, lx+2, iy, lw-4, ROW_H, 3, 0xFFEBF3FF);
             else if (rowHov)
                 GuiRenderer.fillRoundedRect(ms, lx+2, iy, lw-4, ROW_H, 3, GuiRenderer.COL_SELECTED);
-            ctx.method_51433(field_22793, "§8·", lx+7,  iy+4, 0x888888, false);
-            ctx.method_51433(field_22793, blocks.get(idx), lx+16, iy+4, GuiRenderer.COL_BLACK, false);
+            ctx.drawText(textRenderer, "§8·", lx+7,  iy+4, 0x888888, false);
+            ctx.drawText(textRenderer, blocks.get(idx), lx+16, iy+4, GuiRenderer.COL_BLACK, false);
         }
-        // Скроллбар
         if (blocks.size() > LIST_ROWS) {
             float sc = blocks.size() - LIST_ROWS;
             int th2 = Math.max(16, (int)((float)LIST_ROWS / blocks.size() * (lh-8)));
@@ -212,53 +182,50 @@ public class ScannerScreen extends class_437 {
             GuiRenderer.fillRoundedRect(ms, lx+lw-5, ty2,  3, th2,  2, GuiRenderer.COL_GRAY_MID);
         }
         if (blocks.isEmpty())
-            ctx.method_25300(field_22793,
+            ctx.drawCenteredTextWithShadow(textRenderer,
                     "§7Список пуст — добавьте блоки ниже",
                     lx + lw/2, ly + 38, 0xBBBBBB);
 
-        // ── Поле ввода ────────────────────────────────────────────────────────
+        // Поле ввода
         GuiRenderer.fillRoundedRect(ms, px+11, py+Y_INPUT-1, 202, 20, 4, GuiRenderer.COL_SURFACE);
         GuiRenderer.drawRoundedRectOutline(ms, px+11, py+Y_INPUT-1, 202, 20, 4, 1,
-                blockInput.method_25370() ? GuiRenderer.COL_BLACK : GuiRenderer.COL_GRAY_LITE);
-        GuiRenderer.drawButton(ctx, field_22793, px+216, py+Y_INPUT, 112, 18,
+                blockInput.isFocused() ? GuiRenderer.COL_BLACK : GuiRenderer.COL_GRAY_LITE);
+        GuiRenderer.drawButton(ctx, textRenderer, px+216, py+Y_INPUT, 112, 18,
                 "+ Добавить", isHov(BTN_ADD), false);
 
-        GuiRenderer.drawGhostButton(ctx, field_22793, px+12,  py+Y_BTNS, 100, 18, "✕ Удалить",  isHov(BTN_DEL));
-        GuiRenderer.drawGhostButton(ctx, field_22793, px+118, py+Y_BTNS, 105, 18, "↺ Сбросить", isHov(BTN_RESET));
-        GuiRenderer.drawGhostButton(ctx, field_22793, px+229, py+Y_BTNS,  99, 18, "Закрыть",    isHov(BTN_CLOSE));
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px+12,  py+Y_BTNS, 100, 18, "✕ Удалить",  isHov(BTN_DEL));
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px+118, py+Y_BTNS, 105, 18, "↺ Сбросить", isHov(BTN_RESET));
+        GuiRenderer.drawGhostButton(ctx, textRenderer, px+229, py+Y_BTNS,  99, 18, "Закрыть",    isHov(BTN_CLOSE));
 
-        // Разделитель 2 + метка пресеты
+        // Серверные пресеты
         GuiRenderer.fillRect(ms, px+12, py+Y_SEP2, W-24, 1, GuiRenderer.COL_GRAY_LITE);
-        ctx.method_51433(field_22793, "§8СЕРВЕРНЫЕ ПРЕСЕТЫ", px+14, py+Y_SEP2-10, 0xAAAAAA, false);
+        ctx.drawText(textRenderer, "§8СЕРВЕРНЫЕ ПРЕСЕТЫ", px+14, py+Y_SEP2-10, 0xAAAAAA, false);
 
         for (Btn b : buttons) {
             if (!b.id().startsWith("server_")) continue;
             String label = b.id().substring(7);
             boolean active = isServerPresetActive(label);
-            GuiRenderer.drawPresetPill(ctx, field_22793,
+            GuiRenderer.drawPresetPill(ctx, textRenderer,
                     b.x(), b.y(), label, isHovBtn(b), active);
         }
 
-        // ── Главная кнопка ────────────────────────────────────────────────────
+        // Главная кнопка
         int togBg = isHov(BTN_TOGGLE) ? GuiRenderer.COL_HOVER : GuiRenderer.COL_BLACK;
         GuiRenderer.fillRoundedRect(ms, px+12, py+Y_TOGGLE, W-24, 26, 5, togBg);
         String togLabel = ScanConfig.scanEnabled ? "◼  СКАНИРОВАНИЕ АКТИВНО" : "▶  ВКЛЮЧИТЬ СКАНИРОВАНИЕ";
         int togFg = ScanConfig.scanEnabled ? 0xFF88FF88 : 0xFFFFFFFF;
-        int tlw = field_22793.method_1727(togLabel);
-        ctx.method_25303(field_22793, togLabel,
+        int tlw = textRenderer.getWidth(togLabel);
+        ctx.drawTextWithShadow(textRenderer, togLabel,
                 px + 12 + (W-24-tlw)/2, py + Y_TOGGLE + 9, togFg);
 
-        // Лог-путь
         String logPath = shrink(BlockScanner.getLogPath(), W-28);
-        ctx.method_51433(field_22793, "§8" + logPath, px+14, py+Y_LOG, 0x888888, false);
+        ctx.drawText(textRenderer, "§8" + logPath, px+14, py+Y_LOG, 0x888888, false);
 
-        super.method_25394(ctx, mx, my, delta);
+        super.render(ctx, mx, my, delta);
     }
 
-    // ── мышь ──────────────────────────────────────────────────────────────────
     @Override
-    public boolean method_25402(double mx, double my, int btn) {
-        // Клик по списку
+    public boolean mouseClicked(double mx, double my, int btn) {
         int lx = px+12, ly = py+Y_LIST;
         int lw = W-24,  lh = LIST_ROWS*ROW_H+6;
         if (mx>=lx && mx<=lx+lw && my>=ly && my<=ly+lh) {
@@ -268,26 +235,25 @@ public class ScannerScreen extends class_437 {
         for (Btn b : buttons) {
             if (isHovBtn(b)) { handleBtn(b.id()); return true; }
         }
-        return super.method_25402(mx, my, btn);
+        return super.mouseClicked(mx, my, btn);
     }
 
     @Override
-    public boolean method_25401(double mx, double my, double amount) {
+    public boolean mouseScrolled(double mx, double my, double amount) {
         int max = Math.max(0, ScanConfig.targetBlocks.size()-LIST_ROWS);
         scrollOff = Math.max(0, Math.min(max, scrollOff-(int)Math.signum(amount)));
         return true;
     }
 
     @Override
-    public boolean method_25404(int keyCode, int sc, int mod) {
+    public boolean keyPressed(int keyCode, int sc, int mod) {
         if (keyCode==261 && selectedIdx>=0) { removeBlock(); return true; }
-        if (keyCode==257 && blockInput.method_25370()) { addBlock(); return true; }
-        return super.method_25404(keyCode, sc, mod);
+        if (keyCode==257 && blockInput.isFocused()) { addBlock(); return true; }
+        return super.keyPressed(keyCode, sc, mod);
     }
 
-    @Override public boolean method_25421() { return false; }
+    @Override public boolean shouldPause() { return false; }
 
-    // ── действия ──────────────────────────────────────────────────────────────
     private void handleBtn(String id) {
         switch (id) {
             case BTN_TOGGLE -> { ScanConfig.scanEnabled=!ScanConfig.scanEnabled; if(ScanConfig.scanEnabled) BlockScanner.restartSession(); ScanConfig.save(); }
@@ -296,20 +262,16 @@ public class ScannerScreen extends class_437 {
             case BTN_ADD    -> addBlock();
             case BTN_DEL    -> removeBlock();
             case BTN_RESET  -> BlockScanner.restartSession();
-            case BTN_CLOSE  -> method_25419();
+            case BTN_CLOSE  -> close();
             case BTN_TGL_ELYTRA -> { ScanConfig.onlyWhenElytra=!ScanConfig.onlyWhenElytra; ScanConfig.save(); }
             case BTN_TGL_BYPASS -> { ScanConfig.bypassAntiXray=!ScanConfig.bypassAntiXray; ScanConfig.save(); BlockScanner.restartSession(); }
             case BTN_TGL_TEXT   -> { ScanConfig.prioritizeText=!ScanConfig.prioritizeText; ScanConfig.save(); BlockScanner.restartSession(); }
-            default -> {
-                if (id.startsWith("server_")) {
-                    applyServerPreset(id.substring(7));
-                }
-            }
+            default -> { if (id.startsWith("server_")) applyServerPreset(id.substring(7)); }
         }
     }
 
     private void addBlock() {
-        String raw=blockInput.method_1882().trim().toLowerCase();
+        String raw=blockInput.getText().trim().toLowerCase();
         if (raw.isEmpty()) return;
         if (!raw.contains(":")) raw="minecraft:"+raw;
         if (!ScanConfig.targetBlocks.contains(raw)) {
@@ -317,7 +279,7 @@ public class ScannerScreen extends class_437 {
             scrollOff=Math.max(0,ScanConfig.targetBlocks.size()-LIST_ROWS);
             selectedIdx=ScanConfig.targetBlocks.size()-1;
         }
-        blockInput.method_1852("");
+        blockInput.setText("");
     }
 
     private void removeBlock() {
@@ -329,6 +291,7 @@ public class ScannerScreen extends class_437 {
         }
     }
 
+    // ── Серверные пресеты ────────────────────────────────────────────────────
     private static final List<String> FANTIME_BLOCKS = List.of(
             "minecraft:iron_block",
             "minecraft:gold_block",
@@ -337,10 +300,7 @@ public class ScannerScreen extends class_437 {
             "minecraft:diamond_ore",
             "minecraft:emerald_ore"
     );
-
-    private static final List<String> KUBWORLD_BLOCKS = List.of(
-            // будет заполнено позже
-    );
+    private static final List<String> KUBWORLD_BLOCKS = List.of();
 
     private void applyServerPreset(String server) {
         List<String> preset = switch (server) {
@@ -349,15 +309,11 @@ public class ScannerScreen extends class_437 {
             default -> List.of();
         };
         if (preset.isEmpty()) return;
-
-        // Если все блоки пресета уже есть — убираем (тоггл)
         if (ScanConfig.targetBlocks.containsAll(preset)) {
             ScanConfig.targetBlocks.removeAll(preset);
         } else {
-            for (String b : preset) {
-                if (!ScanConfig.targetBlocks.contains(b))
-                    ScanConfig.targetBlocks.add(b);
-            }
+            for (String b : preset)
+                if (!ScanConfig.targetBlocks.contains(b)) ScanConfig.targetBlocks.add(b);
         }
         ScanConfig.save();
         BlockScanner.restartSession();
@@ -374,21 +330,5 @@ public class ScannerScreen extends class_437 {
 
     private boolean isHov(String id) { for (Btn b:buttons) if(b.id().equals(id)) return isHovBtn(b); return false; }
     private boolean isHovBtn(Btn b) { return mouseX>=b.x()&&mouseX<=b.x()+b.w()&&mouseY>=b.y()&&mouseY<=b.y()+b.h(); }
-    private String shrink(String s, int maxW) { while(field_22793.method_1727(s)>maxW&&s.length()>4) s="…"+s.substring(Math.min(s.length(),5)); return s; }
-
-    private static String presetLabel(String id) {
-        return switch(id) {
-            case "minecraft:chest"             -> "Сундук";
-            case "minecraft:spawner"           -> "Спавнер";
-            case "minecraft:ender_chest"       -> "Зашит.";
-            case "minecraft:ancient_debris"    -> "Обломки";
-            case "minecraft:barrel"            -> "Баррель";
-            case "minecraft:diamond_ore"       -> "Алмаз";
-            case "minecraft:emerald_ore"       -> "Изумруд";
-            case "minecraft:nether_gold_ore"   -> "Нет.руда";
-            case "minecraft:nether_quartz_ore" -> "Кварц";
-            case "minecraft:shulker_box"       -> "Шалкер";
-            default -> id.contains(":") ? id.split(":")[1] : id;
-        };
-    }
+    private String shrink(String s, int maxW) { while(textRenderer.getWidth(s)>maxW&&s.length()>4) s="…"+s.substring(Math.min(s.length(),5)); return s; }
 }
