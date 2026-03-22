@@ -73,19 +73,29 @@ public class BlockScanner {
                                    && distZ <= BYPASS_CLOSE_CHUNKS;
 
                     if (isClose) {
-                        if (!scannedClose.contains(key)) {
+                        // Ещё не в очереди/не просканирован
+                        if (!scannedChunks.contains(key) && !scannedClose.contains(key)) {
+                            // Фиксируем время первого сближения
                             chunkCloseTime.putIfAbsent(key, System.currentTimeMillis());
-                            long closeTime = chunkCloseTime.get(key);
-                            if (System.currentTimeMillis() - closeTime >= BYPASS_DELAY_MS) {
-                                scannedClose.add(key);
-                                scannedChunks.add(key);
-                                scanQueue.add(new ChunkPos(cx, cz));
-                                chunkCloseTime.remove(key);
-                            }
+                        }
+                        // Проверяем задержку — только тогда ставим в очередь
+                        Long closeTime = chunkCloseTime.get(key);
+                        if (closeTime != null
+                                && !scannedChunks.contains(key)
+                                && !scannedClose.contains(key)
+                                && System.currentTimeMillis() - closeTime >= BYPASS_DELAY_MS) {
+                            scannedClose.add(key);
+                            scannedChunks.add(key);
+                            scanQueue.add(new ChunkPos(cx, cz));
+                            chunkCloseTime.remove(key);
                         }
                     } else {
+                        // Улетели — сбрасываем таймер, чтобы при следующем
+                        // сближении чанк перечитался с настоящими блоками
+                        if (!scannedChunks.contains(key)) {
+                            chunkCloseTime.remove(key);
+                        }
                         scannedClose.remove(key);
-                        chunkCloseTime.remove(key);
                     }
                 } else {
                     if (!scannedChunks.contains(key)) {
@@ -124,8 +134,14 @@ public class BlockScanner {
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
                     if (!ScanConfig.targetBlocks.contains(id)) continue;
 
-                    String label = ScanConfig.prioritizeText
+                    String label = (ScanConfig.prioritizeText || ScanConfig.onlyWithText)
                             ? findTextAtBlock(world, pos) : null;
+
+                    // Только с текстом
+                    if (ScanConfig.onlyWithText && label == null) continue;
+
+                    // Только если рядом сундук в радиусе 30 блоков
+                    if (ScanConfig.onlyNearChest && !hasChestNearby(world, pos, 30)) continue;
 
                     foundSet.add(pos.toImmutable());
                     newBlocks.add(new FoundBlock(pos.toImmutable(), id, label));
@@ -178,6 +194,27 @@ public class BlockScanner {
 
     private static String strip(String s) {
         return s.replaceAll("§[0-9a-fk-orA-FK-OR]", "").trim();
+    }
+
+    /** Проверяет есть ли сундук/баррель/шалкер в радиусе r блоков от pos */
+    private static boolean hasChestNearby(World world, BlockPos center, int r) {
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (dx*dx + dy*dy + dz*dz > r*r) continue;
+                    BlockPos check = center.add(dx, dy, dz);
+                    String bid = Registries.BLOCK.getId(
+                            world.getBlockState(check).getBlock()).toString();
+                    if (bid.equals("minecraft:chest")
+                            || bid.equals("minecraft:trapped_chest")
+                            || bid.equals("minecraft:barrel")
+                            || bid.contains("shulker_box")) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ── запись в лог с кластеризацией ────────────────────────────────────────
